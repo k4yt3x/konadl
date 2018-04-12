@@ -5,6 +5,8 @@
 
 ## What is this
 
+**It bulk downloads images from Konachan.com**
+
 Konachan downloader is a library that helps you bulk downloading images according to ratings (Safe/Questionable/Explicit) from konachan.com / konachan.net while also being a standalone program that can run directly on any platform that supports python (at least according to the current design).
 
 </br>
