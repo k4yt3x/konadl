@@ -72,7 +72,7 @@ class konadl:
         This method initializes the crawler, defines site root
         url and defines image storage folder.
         """
-        self.VERSION = '1.1'
+        self.VERSION = '1.2'
         self.storage = '/tmp/konachan/'
         self.yandere = False  # Use Yande.re website
         self.safe = True
