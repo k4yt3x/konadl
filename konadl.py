@@ -12,7 +12,7 @@
 Name: Konachan Downloader
 Dev: K4YT3X
 Date Created: 11 Apr. 2018
-Last Modified: 11 Apr. 2018
+Last Modified: 13 Apr. 2018
 
 Licensed under the GNU General Public License Version 3 (GNU GPL v3),
     available at: https://www.gnu.org/licenses/gpl-3.0.txt
@@ -23,9 +23,34 @@ script / library that will help you download
 konachan.com / konachan.net images.
 """
 from bs4 import BeautifulSoup
+import datetime
 import re
 import os
 import urllib.request
+
+
+def self_recovery(function):
+    """ Fail-safe when program fails
+
+    This function should be used with the decorator
+    @self_recovery only. Using this decoratorwill enable
+    the ability for the decorated function to keep retrying
+    until error is resolved.
+
+    This funciton is made since konachan may ban requests. This is
+    especially useful when using crawl_all
+    """
+
+    def wrapper(*args):
+        while True:
+            try:
+                return function(*args)
+            except Exception:
+                hour = datetime.datetime.now().time().hour
+                minute = datetime.datetime.now().time().minute
+                second = datetime.datetime.now().time().second
+                print('[{}:{}:{}] Error Detected. Retrying.....'.format(hour, minute, second), end='\r')
+    return wrapper
 
 
 class konadl:
@@ -43,7 +68,7 @@ class konadl:
         This method initializes the crawler, defines site root
         url and defines image storage folder.
         """
-        self.VERSION = '1.0'
+        self.VERSION = '1.1'
         self.explicit = False
         self.explicit_only = False
         self.include_questionable = False
@@ -102,6 +127,7 @@ class konadl:
         else:
             return False
 
+    @self_recovery
     def get_page(self, url):
         """ Get page using urllib.request
         """
@@ -115,6 +141,7 @@ class konadl:
         with urllib.request.urlopen(req) as response:
             return response.read()
 
+    @self_recovery
     def download_file(self, url, file_name):
         """ Download file
 
@@ -126,6 +153,7 @@ class konadl:
         file_path = self.storage + file_name + '.' + suffix
         urllib.request.urlretrieve(url, file_path)
 
+    @self_recovery
     def retrieve_post_image(self, uri):
         """ Get the large image url and download
 
@@ -145,6 +173,7 @@ class konadl:
             else:
                 self.download_file(link['src'], uri.split("/")[-1])
 
+    @self_recovery
     def crawl_post_page(self, page):
         """ Crawl the post list page and find posts
 
