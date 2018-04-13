@@ -85,7 +85,7 @@ def display_options(kona):
     Also shows other supplement information if any. More to
     be added in the future.
     """
-    avalon.subLevelTimeInfo('Program Started')
+    avalon.dbgInfo('Program Started')
     avalon.info('Using storage directory: {}{}'.format(avalon.FG.W, kona.storage))
     if kona.safe:
         avalon.info('Including {}{}SAFE{}{} rated images'.format(avalon.FG.W, avalon.FM.BD, avalon.FM.RST, avalon.FG.G))
@@ -112,7 +112,7 @@ args = process_arguments()
 
 class konadl_linux(konadl):
     def print_retrieval(self, url):
-        avalon.subLevelTimeInfo("Retrieving: {}".format(url))
+        avalon.dbgInfo("Retrieving: {}".format(url))
 
     def print_crawling_page(self, page):
         avalon.info('Crawling page: {}{}#{}'.format(avalon.FM.BD, avalon.FG.W, page))
