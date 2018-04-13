@@ -1,7 +1,12 @@
 # Konachan Downloader
 
-#### Current Version: 1.0
+#### Current Version: 1.1
 
+### Current Version Changes
+
+1. Added self-recovery when exception caught
+
+</br>
 
 ## What is this
 
