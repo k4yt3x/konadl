@@ -260,6 +260,7 @@ class konadl:
             elif self.explicit and rating == 'explicit':
                 pass
             else:
+                download_queue.task_done()
                 continue
 
             image_soup = BeautifulSoup(image_page_source, "html.parser")
