@@ -24,9 +24,12 @@ konachan.com / konachan.net images.
 """
 from bs4 import BeautifulSoup
 import datetime
+import queue
 import re
-import urllib.request
+import threading
 import traceback
+import time
+import urllib.request
 
 
 def self_recovery(function):
@@ -72,12 +75,15 @@ class konadl:
         This method initializes the crawler, defines site root
         url and defines image storage folder.
         """
-        self.VERSION = '1.2'
+        self.begin_time = time.time()
+        self.VERSION = '1.3'
         self.storage = '/tmp/konachan/'
         self.yandere = False  # Use Yande.re website
         self.safe = True
         self.explicit = False
         self.questionable = False
+        self.post_crawler_threads_amount = 10
+        self.downloader_threads_amount = 20
 
     def icon(self):
         print('     _   __                       ______  _')
@@ -111,10 +117,48 @@ class konadl:
         "total_pages"
         """
         self.process_crawling_options()
+
+        # Initialize page queue and downloader queue
+        post_queue = queue.Queue()
+        download_queue = queue.Queue()
+        # Prepare containers for threads
+        page_threads = []
+        downloader_threads = []
+
+        # Create post crawler threads
+        for identifier in range(self.post_crawler_threads_amount):
+            thread = threading.Thread(target=self.crawl_post_page_worker, args=(post_queue, download_queue))
+            thread.name = 'Post Crawler {}'.format(identifier)
+            thread.start()
+            page_threads.append(thread)
+
+        # Create image downloader threads
+        for identifier in range(self.downloader_threads_amount):
+            thread = threading.Thread(target=self.retrieve_post_image_worker, args=(download_queue,))
+            thread.name = 'Downloader {}'.format(identifier)
+            thread.start()
+            downloader_threads.append(thread)
+
+        # Every page is a job in the queue
         for page_num in range(1, total_pages + 1):
-            page_posts = self.crawl_post_page(page_num)
-            for post in page_posts:
-                self.retrieve_post_image(post)
+            post_queue.put(page_num)
+
+        post_queue.join()
+        download_queue.join()
+        for _ in range(self.post_crawler_threads_amount):
+            post_queue.put(None)
+        for _ in range(self.downloader_threads_amount):
+            download_queue.put(None)
+
+        while True:
+            for thread in page_threads:
+                if thread.is_alive():
+                    continue
+            for thread in downloader_threads:
+                if thread.is_alive():
+                    continue
+            time.sleep(1)
+            break
 
     def crawl_page(self, page_num):
         """ Crawl a specific page
@@ -139,7 +183,6 @@ class konadl:
         index_soup = BeautifulSoup(index_page, "html.parser")
         total_pages = int(index_soup.findAll('a', href=True)[-10].text)
         self.crawl(total_pages)
-        raise SystemError
 
     def get_page_rating(self, content):
         """ Get page rating
@@ -190,45 +233,59 @@ class konadl:
         This method can be overwritten in CLI for
         better appearance
         """
-        print("Retrieving: {}".format(url))
+        hour = datetime.datetime.now().time().hour
+        minute = datetime.datetime.now().time().minute
+        second = datetime.datetime.now().time().second
+        print("[{}:{}:{}] Retrieving: {}".format(hour, minute, second, url))
 
     @self_recovery
-    def retrieve_post_image(self, uri):
+    def retrieve_post_image_worker(self, download_queue):
         """ Get the large image url and download
 
         Crawls the post page, find the large image url(s)
         and calls the downloader to download all of them.
         """
-        image_page_source = self.get_page(self.site_root + uri)
-        rating = self.get_page_rating(image_page_source.decode('utf-8'))
+        while True:
+            uri = download_queue.get()
+            if uri is None:
+                self.print_thread_exit(str(threading.current_thread().name))
+                break
+            image_page_source = self.get_page(self.site_root + uri)
+            rating = self.get_page_rating(image_page_source.decode('utf-8'))
 
-        if self.safe and rating != 'safe':
-            if self.questionable and rating != 'questionable':
-                if self.explicit and rating != 'explicit':
-                    return
+            if self.safe and rating != 'safe':
+                if self.questionable and rating != 'questionable':
+                    if self.explicit and rating != 'explicit':
+                        continue
 
-        image_soup = BeautifulSoup(image_page_source, "html.parser")
-        for link in image_soup.findAll('img', {'class': 'image'}):
-            if 'https:' not in link['src']:
-                self.download_file('https:' + link['src'], uri.split("/")[-1])
-            else:
-                self.download_file(link['src'], uri.split("/")[-1])
+            image_soup = BeautifulSoup(image_page_source, "html.parser")
+            for link in image_soup.findAll('img', {'class': 'image'}):
+                if 'https:' not in link['src']:
+                    self.download_file('https:' + link['src'], uri.split("/")[-1])
+                else:
+                    self.download_file(link['src'], uri.split("/")[-1])
+            download_queue.task_done()
 
     @self_recovery
-    def crawl_post_page(self, page):
+    def crawl_post_page_worker(self, post_queue, download_queue):
         """ Crawl the post list page and find posts
 
         Craws the posts index pages and record every post's
         url before handing them to the image downloader.
         """
-        self.print_crawling_page(page)
-        posts = []
-        page_source = self.get_page('{}/post?page={}&tags='.format(self.site_root, page))
-        soup = BeautifulSoup(page_source, "html.parser")
-        for link in soup.findAll('a', href=True):
-            if re.match('/post/show/[0-9]*', link['href']):
-                posts.append(link['href'])
-        return posts
+        while True:
+            page = post_queue.get()
+            if page is None:
+                self.print_thread_exit(str(threading.current_thread().name))
+                break
+            self.print_crawling_page(page)
+
+            page_source = self.get_page('{}/post?page={}&tags='.format(self.site_root, page))
+            soup = BeautifulSoup(page_source, "html.parser")
+            for link in soup.findAll('a', href=True):
+                if re.match('/post/show/[0-9]*', link['href']):
+                    download_queue.put(link['href'])
+            post_queue.task_done()
 
     def print_crawling_page(self, page):
         """ Print which page is being crawled
@@ -236,6 +293,11 @@ class konadl:
         better appearance
         """
         print('Crawling page {}'.format(page))
+
+    def print_thread_exit(self, name):
+        """Thread exiting message
+        """
+        print('[libkonadl] {} thread exiting'.format(name))
 
 
 if __name__ == '__main__':
@@ -251,7 +313,11 @@ if __name__ == '__main__':
     kona.yandere = False  # If you want to crawl yande.re
 
     # Set rating settings
-    kona.safe = False
+    kona.safe = True
     kona.explicit = False
     kona.questionable = False
+    kona.post_crawler_threads_amount = 10
+    kona.downloader_threads_amount = 20
     kona.crawl(10)  # Execute. Crawl 10 pages
+    print('\nKonachan Downloader finished successfully')
+    print('Time taken: {} seconds'.format(round((time.time() - kona.begin_time), 5)))
