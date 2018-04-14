@@ -76,7 +76,7 @@ class konadl:
         url and defines image storage folder.
         """
         self.begin_time = time.time()
-        self.VERSION = '1.3'
+        self.VERSION = '1.3.1'
         self.storage = '/tmp/konachan/'
         self.yandere = False  # Use Yande.re website
         self.safe = True
@@ -253,10 +253,14 @@ class konadl:
             image_page_source = self.get_page(self.site_root + uri)
             rating = self.get_page_rating(image_page_source.decode('utf-8'))
 
-            if self.safe and rating != 'safe':
-                if self.questionable and rating != 'questionable':
-                    if self.explicit and rating != 'explicit':
-                        continue
+            if kona.safe and rating == 'safe':
+                pass
+            elif kona.questionable and rating == 'questionable':
+                pass
+            elif kona.explicit and rating == 'explicit':
+                pass
+            else:
+                continue
 
             image_soup = BeautifulSoup(image_page_source, "html.parser")
             for link in image_soup.findAll('img', {'class': 'image'}):

@@ -1,6 +1,6 @@
 # Konachan Downloader
 
-#### libkonadl Version: 1.3
+#### libkonadl Version: 1.3.1
 #### KonaDL CLI Version: 1.1
 
 </br>
