@@ -16,7 +16,7 @@ import argparse
 import os
 import traceback
 
-VERSION = '1.0'
+VERSION = '1.1'
 
 
 def process_arguments():
@@ -30,13 +30,17 @@ def process_arguments():
     control_group.add_argument('-n', '--pages', help='Number of pages to download', type=int, action='store', default=False)
     control_group.add_argument('-a', '--all', help='Download all images', action='store_true', default=False)
     control_group.add_argument('-p', '--page', help='Crawl a specific page', type=int, action='store', default=False)
+    control_group.add_argument('-y', '--yandere', help='Crawl Yande.re site', action='store_true', default=False)
+    control_group.add_argument('-o', '--storage', help='Storage directory', action='store', default=False)
+    threading_group = parser.add_argument_group('Ratings')
     control_group.add_argument('-s', '--safe', help='Include Safe rated images', action='store_true', default=False)
     control_group.add_argument('-q', '--questionable', help='Include Questionable rated images', action='store_true', default=False)
     control_group.add_argument('-e', '--explicit', help='Include Explicit rated images', action='store_true', default=False)
-    control_group.add_argument('-y', '--yandere', help='Crawl Yande.re site', action='store_true', default=False)
-    control_group.add_argument('-o', '--storage', help='Storage directory', action='store', default=False)
-    etc = parser.add_argument_group('Extra')
-    etc.add_argument('-v', '--version', help='Show KonaDL version and exit', action='store_true', default=False)
+    threading_group = parser.add_argument_group('Threading')
+    threading_group.add_argument('-c', '--crawlers', help='Number of post crawler threads', type=int, action='store', default=10)
+    threading_group.add_argument('-d', '--downloaders', help='Number of downloader threads', type=int, action='store', default=20)
+    etc_group = parser.add_argument_group('Extra')
+    etc_group.add_argument('-v', '--version', help='Show KonaDL version and exit', action='store_true', default=False)
     return parser.parse_args()
 
 
@@ -102,20 +106,30 @@ def display_options(kona):
         else:
             avalon.info('Crawling {}{}{}{}{} Pages\n'.format(avalon.FG.W, avalon.FM.BD, args.pages, avalon.FM.RST, avalon.FG.G))
     elif args.all:
-        avalon.warning('Crawling {}{}ALL{}{} Pages'.format(avalon.FG.W, avalon.FM.BD, avalon.FM.RST, avalon.FG.G))
+        avalon.warning('Crawling {}{}ALL{}{} Pages\n'.format(avalon.FG.W, avalon.FM.BD, avalon.FM.RST, avalon.FG.G))
     elif args.page:
         avalon.info('Crawling Page #{}'.format(args.page))
+
+    avalon.info('Opening {}{}{}{}{} crawler threads'.format(avalon.FG.W, avalon.FM.BD, args.crawlers, avalon.FM.RST, avalon.FG.G))
+    avalon.info('Opening {}{}{}{}{} downloader threads\n'.format(avalon.FG.W, avalon.FM.BD, args.downloaders, avalon.FM.RST, avalon.FG.G))
 
 
 args = process_arguments()
 
 
 class konadl_linux(konadl):
+    """ Overwrite original methods for better
+    appearance and readability.
+    """
+
     def print_retrieval(self, url):
         avalon.dbgInfo("Retrieving: {}".format(url))
 
     def print_crawling_page(self, page):
         avalon.info('Crawling page: {}{}#{}'.format(avalon.FM.BD, avalon.FG.W, page))
+
+    def print_thread_exit(self, name):
+        avalon.dbgInfo('[libkonadl] {} thread exiting'.format(name))
 
 
 try:
@@ -137,6 +151,8 @@ try:
         kona.safe = args.safe
         kona.questionable = args.questionable
         kona.explicit = args.explicit
+        kona.post_crawler_threads_amount = args.crawlers
+        kona.downloader_threads_amount = args.downloaders
         display_options(kona)
 
         if not kona.safe and not kona.questionable and not kona.explicit:
