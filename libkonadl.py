@@ -253,11 +253,11 @@ class konadl:
             image_page_source = self.get_page(self.site_root + uri)
             rating = self.get_page_rating(image_page_source.decode('utf-8'))
 
-            if kona.safe and rating == 'safe':
+            if self.safe and rating == 'safe':
                 pass
-            elif kona.questionable and rating == 'questionable':
+            elif self.questionable and rating == 'questionable':
                 pass
-            elif kona.explicit and rating == 'explicit':
+            elif self.explicit and rating == 'explicit':
                 pass
             else:
                 continue
