@@ -62,6 +62,20 @@ def self_recovery(function):
     return wrapper
 
 
+def print_locker(function):
+    """ Prevents printing formating error
+
+    Prevents other threads from printing when
+    current thread is printing.
+    """
+
+    def wrapper(*args):
+        args[0].print_lock.acquire()
+        function(*args)
+        args[0].print_lock.release()
+    return wrapper
+
+
 class konadl:
     """
     Konachan Downloader
@@ -78,7 +92,7 @@ class konadl:
         url and defines image storage folder.
         """
         self.begin_time = time.time()
-        self.VERSION = '1.4'
+        self.VERSION = '1.4.1'
         self.storage = '/tmp/konachan/'
         self.pages = False
         self.crawl_all = False
@@ -142,6 +156,8 @@ class konadl:
         self.page_threads = []
         self.downloader_threads = []
 
+        self.print_lock = threading.Lock()
+
         try:
             # Create post crawler threads
             for identifier in range(self.post_crawler_threads_amount):
@@ -194,21 +210,6 @@ class konadl:
             self.download_queue.queue.clear()
             for _ in range(self.downloader_threads_amount):
                 self.download_queue.put((None, None))
-
-    def warn_keyboard_interrupt(self):
-        """ Tells the user that Ctrl^C is caught
-        This method can be overwritten in CLI for
-        better appearance
-        """
-        print('[Main Thread] KeyboardInterrupt Caught!')
-        print('[Main Thread] Flushing queues and exiting')
-
-    def print_saving_progress(self):
-        """ Tells the user progress is being saved
-        This method can be overwritten in CLI for
-        better appearance
-        """
-        print('[Main Thread] Saving progress')
 
     def crawl_page(self, page_num):
         """ [OUTDATED] Crawl a specific page
@@ -279,16 +280,6 @@ class konadl:
         file_path = self.storage + file_name + '.' + suffix
         urllib.request.urlretrieve(url, file_path)
 
-    def print_retrieval(self, url, page):
-        """ Print retrieval information
-        This method can be overwritten in CLI for
-        better appearance
-        """
-        hour = datetime.datetime.now().time().hour
-        minute = datetime.datetime.now().time().minute
-        second = datetime.datetime.now().time().second
-        print("[{}:{}:{}] [Page={}]Retrieving: {}".format(hour, minute, second, page, url))
-
     @self_recovery
     def retrieve_post_image_worker(self, download_queue):
         """ Get the large image url and download
@@ -343,18 +334,6 @@ class konadl:
                     download_queue.put((link['href'], page))
             post_queue.task_done()
 
-    def print_crawling_page(self, page):
-        """ Print which page is being crawled
-        This method can be overwritten in CLI for
-        better appearance
-        """
-        print('Crawling page {}'.format(page))
-
-    def print_thread_exit(self, name):
-        """Thread exiting message
-        """
-        print('[libkonadl] {} thread exiting'.format(name))
-
     def save_progress(self):
         progress = configparser.ConfigParser()
         progress['PAGES'] = {}
@@ -392,6 +371,49 @@ class konadl:
             self.print_faulty_progress_file()
             exit(1)
 
+    @print_locker
+    def warn_keyboard_interrupt(self):
+        """ Tells the user that Ctrl^C is caught
+        This method can be overwritten in CLI for
+        better appearance
+        """
+        print('[Main Thread] KeyboardInterrupt Caught!')
+        print('[Main Thread] Flushing queues and exiting')
+
+    @print_locker
+    def print_saving_progress(self):
+        """ Tells the user progress is being saved
+        This method can be overwritten in CLI for
+        better appearance
+        """
+        print('[Main Thread] Saving progress')
+
+    @print_locker
+    def print_retrieval(self, url, page):
+        """ Print retrieval information
+        This method can be overwritten in CLI for
+        better appearance
+        """
+        hour = datetime.datetime.now().time().hour
+        minute = datetime.datetime.now().time().minute
+        second = datetime.datetime.now().time().second
+        print("[{}:{}:{}] [Page={}]Retrieving: {}".format(hour, minute, second, page, url))
+
+    @print_locker
+    def print_crawling_page(self, page):
+        """ Print which page is being crawled
+        This method can be overwritten in CLI for
+        better appearance
+        """
+        print('Crawling page {}'.format(page))
+
+    @print_locker
+    def print_thread_exit(self, name):
+        """Thread exiting message
+        """
+        print('[libkonadl] {} thread exiting'.format(name))
+
+    @print_locker
     def print_faulty_progress_file(self):
         print('Error: Faulty progress file!')
         print('Aborting\n')
