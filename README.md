@@ -1,12 +1,29 @@
 # Konachan Downloader
 
-#### libkonadl Version: 1.3.2
-#### KonaDL CLI Version: 1.1
+#### libkonadl Version: 1.4
+#### KonaDL CLI Version: 1.2
+
+</br>
+
+## Important Feature
+
+Just preventing people from missing this.
+
+**You can press Ctrl+C at any time to pause the download.**  
+**The progress will be saved and you will be prompted automatically to continue the next time you launch the program.**
 
 </br>
 
 ### Current Version Changes
 
+1. User can now continue from where they left off
+   + Progress will be saved when download queue not empty
+   + KonaDL CLI automatically detects if progress file is present
+1. Minor changes to the libkonadl API
+
+### Recent Changes
+
+1. Added self-recovery when exception caught
 1. libkonadl can now handle ctrl+c properly and exit gracefully
 1. Added **multithreading**
 1. Added KonaDL CLI for Linux and Windows
@@ -14,10 +31,6 @@
 1. Self-recovery is now available
 1. Added support for [Yande.re](https://yande.re)
 1. Other useful changes
-
-### Recent Changes
-
-1. Added self-recovery when exception caught
 
 </br>
 
@@ -101,43 +114,53 @@ Here's a simple example of how to use libkonadl library.
 ```
 from libkonadl import konadl  # Import library
 
+""" Sample crawling
+
+Crawls safe images off of konachan.com
+when called directly as a standalone program
+for demonstration.
+"""
 kona = konadl()  # Create crawler object
 
 # Set storage directory
 # Note that there's a "/" and the end
 kona.storage = '/tmp/konachan/'
+if not os.path.isdir(kona.storage):  # Quit if storage directory not found
+    print('Error: storage directory not found')
+    exit(1)
 
-kona.yandere = False  # If you want to crawl yande.re
+# Set this to True If you want to crawl yande.re
+kona.yandere = False
 
-# Download images by rating
+# Download images by ratings
 kona.safe = True            # Include safe rated images
 kona.questionable = False   # Include questionable rated images
 kona.explicit = False       # Include explicit rated images
 
-# Set threads
+# Set crawler and downloader threads
 kona.post_crawler_threads_amount = 10
 kona.downloader_threads_amount = 20
+kona.pages = 3  # Crawl 3 pages
+if os.path.isfile(kona.progress_file):
+    print('Loading downloading progress')
+    kona.load_progress = True
 
-# Execute. Crawl 10 pages
-kona.crawl(10)
-
-# konadl will record the time when object
-# is created automatically at self.begin_time
-print('\nKonachan Downloader finished successfully')
+# Execute
+kona.crawl()
+print('\nMain thread exited without errors')
 print('Time taken: {} seconds'.format(round((time.time() - kona.begin_time), 5)))
-
 ```
 
 If you want to crawl all images:
 
 ```
-kona.crawl_all()
+kona.crawl_all_pages()
 ```
 
 Here's how you can overwrite a method:
 
 ```
-class konadl_linux(konadl):
+class konadl_avalon(konadl):
     """ Overwrite original methods for better
     appearance and readability.
     """
@@ -150,4 +173,7 @@ class konadl_linux(konadl):
 
     def print_thread_exit(self, name):
         avalon.dbgInfo('[libkonadl] {} thread exiting'.format(name))
+
+# Create an object off of the modified class
+kona = konadl_avalon()
 ```
