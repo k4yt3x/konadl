@@ -11,12 +11,13 @@ Licensed under the GNU General Public License Version 3 (GNU GPL v3),
 """
 
 from libkonadl import konadl  # Import libkonadl
+from libkonadl import print_locker
 import avalon_framework as avalon
 import argparse
 import os
 import traceback
 
-VERSION = '1.2'
+VERSION = '1.2.1'
 
 
 def process_arguments():
@@ -123,22 +124,28 @@ class konadl_avalon(konadl):
     appearance and readability.
     """
 
+    @print_locker
     def warn_keyboard_interrupt(self):
         avalon.warning('[Main Thread] KeyboardInterrupt Caught!')
         avalon.warning('[Main Thread] Flushing queues and exiting')
 
+    @print_locker
     def print_saving_progress(self):
         avalon.info('[Main Thread] Saving progress')
 
+    @print_locker
     def print_retrieval(self, page, url):
         avalon.dbgInfo("[Page={}] Retrieving: {}".format(page, url))
 
+    @print_locker
     def print_crawling_page(self, page):
         avalon.info('Crawling page: {}{}#{}'.format(avalon.FM.BD, avalon.FG.W, page))
 
+    @print_locker
     def print_thread_exit(self, name):
         avalon.dbgInfo('[libkonadl] {} thread exiting'.format(name))
 
+    @print_locker
     def print_faulty_progress_file(self):
         avalon.error('Faulty progress file!')
         avalon.error('Aborting\n')
