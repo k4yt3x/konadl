@@ -23,12 +23,14 @@ script / library that will help you download
 konachan.com / konachan.net images.
 """
 from bs4 import BeautifulSoup
+import configparser
 import datetime
+import os
 import queue
 import re
 import threading
-import traceback
 import time
+import traceback
 import urllib.request
 
 
@@ -76,8 +78,10 @@ class konadl:
         url and defines image storage folder.
         """
         self.begin_time = time.time()
-        self.VERSION = '1.3.2'
+        self.VERSION = '1.4'
         self.storage = '/tmp/konachan/'
+        self.pages = False
+        self.crawl_all = False
         self.yandere = False  # Use Yande.re website
         self.safe = True
         self.explicit = False
@@ -85,6 +89,8 @@ class konadl:
         self.post_crawler_threads_amount = 10
         self.downloader_threads_amount = 20
         self.logging = True
+        self.load_progress = False
+        self.progress_file = 'konadl.progress'
 
     def icon(self):
         print('     _   __                       ______  _')
@@ -110,7 +116,7 @@ class konadl:
         if self.yandere:
             self.site_root = 'https://yande.re'
 
-    def crawl(self, total_pages):
+    def crawl(self):
         """ Generic crawling
 
         Regular crawling controller. Craws a certain amount
@@ -119,44 +125,58 @@ class konadl:
         """
         self.process_crawling_options()
 
+        # load progress from progress file if needed
+        if self.load_progress:
+            pages, page, download = self.read_progress()
+            if pages.isdigit():
+                self.pages = int(pages)
+            else:
+                index_page = self.get_page('{}/post?page=1&tags='.format(self.site_root))
+                index_soup = BeautifulSoup(index_page, "html.parser")
+                self.pages = int(index_soup.findAll('a', href=True)[-10].text)
+
         # Initialize page queue and downloader queue
-        post_queue = queue.Queue()
-        download_queue = queue.Queue()
+        self.post_queue = queue.Queue()
+        self.download_queue = queue.Queue()
         # Prepare containers for threads
-        page_threads = []
-        downloader_threads = []
+        self.page_threads = []
+        self.downloader_threads = []
 
         try:
             # Create post crawler threads
             for identifier in range(self.post_crawler_threads_amount):
-                thread = threading.Thread(target=self.crawl_post_page_worker, args=(post_queue, download_queue))
+                thread = threading.Thread(target=self.crawl_post_page_worker, args=(self.post_queue, self.download_queue))
                 thread.name = 'Post Crawler {}'.format(identifier)
                 thread.start()
-                page_threads.append(thread)
+                self.page_threads.append(thread)
 
             # Create image downloader threads
             for identifier in range(self.downloader_threads_amount):
-                thread = threading.Thread(target=self.retrieve_post_image_worker, args=(download_queue,))
+                thread = threading.Thread(target=self.retrieve_post_image_worker, args=(self.download_queue,))
                 thread.name = 'Downloader {}'.format(identifier)
                 thread.start()
-                downloader_threads.append(thread)
+                self.downloader_threads.append(thread)
 
             # Every page is a job in the queue
-            for page_num in range(1, total_pages + 1):
-                post_queue.put(page_num)
+            if self.load_progress:
+                for page_num in range(page, self.pages + 1):
+                    self.post_queue.put(page_num)
+            else:
+                for page_num in range(1, self.pages + 1):
+                    self.post_queue.put(page_num)
 
-            post_queue.join()
-            download_queue.join()
+            self.post_queue.join()
+            self.download_queue.join()
             for _ in range(self.post_crawler_threads_amount):
-                post_queue.put(None)
+                self.post_queue.put(None)
             for _ in range(self.downloader_threads_amount):
-                download_queue.put(None)
+                self.download_queue.put((None, None))
 
             while True:
-                for thread in page_threads:
+                for thread in self.page_threads:
                     if thread.is_alive():
                         continue
-                for thread in downloader_threads:
+                for thread in self.downloader_threads:
                     if thread.is_alive():
                         continue
                 time.sleep(1)
@@ -165,12 +185,15 @@ class konadl:
             # Main thread catches KeyboardInterrupt
             # Clear queues and put None as exit signal
             self.warn_keyboard_interrupt()
-            post_queue.queue.clear()
+            if not self.download_queue.empty():
+                self.print_saving_progress()
+                self.save_progress()
+            self.post_queue.queue.clear()
             for _ in range(self.post_crawler_threads_amount):
-                post_queue.put(None)
-            download_queue.queue.clear()
+                self.post_queue.put(None)
+            self.download_queue.queue.clear()
             for _ in range(self.downloader_threads_amount):
-                download_queue.put(None)
+                self.download_queue.put((None, None))
 
     def warn_keyboard_interrupt(self):
         """ Tells the user that Ctrl^C is caught
@@ -180,8 +203,15 @@ class konadl:
         print('[Main Thread] KeyboardInterrupt Caught!')
         print('[Main Thread] Flushing queues and exiting')
 
+    def print_saving_progress(self):
+        """ Tells the user progress is being saved
+        This method can be overwritten in CLI for
+        better appearance
+        """
+        print('[Main Thread] Saving progress')
+
     def crawl_page(self, page_num):
-        """ Crawl a specific page
+        """ [OUTDATED] Crawl a specific page
 
         This is very similar to the "crawl" method.
         Instead of crawling a number of pages, this
@@ -192,17 +222,18 @@ class konadl:
         for post in page_posts:
             self.retrieve_post_image(post)
 
-    def crawl_all(self):
+    def crawl_all_pages(self):
         """ Crawl the entire site
 
         WARNING: this will crawl thousands of pages
         use with caution!
         """
+        self.crawl_all = True
         self.process_crawling_options()
         index_page = self.get_page('{}/post?page=1&tags='.format(self.site_root))
         index_soup = BeautifulSoup(index_page, "html.parser")
-        total_pages = int(index_soup.findAll('a', href=True)[-10].text)
-        self.crawl(total_pages)
+        self.pages = int(index_soup.findAll('a', href=True)[-10].text)
+        self.crawl()
 
     def get_page_rating(self, content):
         """ Get page rating
@@ -237,18 +268,18 @@ class konadl:
             return response.read()
 
     @self_recovery
-    def download_file(self, url, file_name):
+    def download_file(self, url, page, file_name):
         """ Download file
 
         Downloads one file and saves it to the
         specified folder with its original name.
         """
-        self.print_retrieval(url)
+        self.print_retrieval(url, page)
         suffix = url.split(".")[-1]
         file_path = self.storage + file_name + '.' + suffix
         urllib.request.urlretrieve(url, file_path)
 
-    def print_retrieval(self, url):
+    def print_retrieval(self, url, page):
         """ Print retrieval information
         This method can be overwritten in CLI for
         better appearance
@@ -256,7 +287,7 @@ class konadl:
         hour = datetime.datetime.now().time().hour
         minute = datetime.datetime.now().time().minute
         second = datetime.datetime.now().time().second
-        print("[{}:{}:{}] Retrieving: {}".format(hour, minute, second, url))
+        print("[{}:{}:{}] [Page={}]Retrieving: {}".format(hour, minute, second, page, url))
 
     @self_recovery
     def retrieve_post_image_worker(self, download_queue):
@@ -266,7 +297,7 @@ class konadl:
         and calls the downloader to download all of them.
         """
         while True:
-            uri = download_queue.get()
+            uri, page = download_queue.get()
             if uri is None:
                 self.print_thread_exit(str(threading.current_thread().name))
                 break
@@ -286,9 +317,9 @@ class konadl:
             image_soup = BeautifulSoup(image_page_source, "html.parser")
             for link in image_soup.findAll('img', {'class': 'image'}):
                 if 'https:' not in link['src']:
-                    self.download_file('https:' + link['src'], uri.split("/")[-1])
+                    self.download_file('https:' + link['src'], page, uri.split("/")[-1])
                 else:
-                    self.download_file(link['src'], uri.split("/")[-1])
+                    self.download_file(link['src'], page, uri.split("/")[-1])
             download_queue.task_done()
 
     @self_recovery
@@ -309,7 +340,7 @@ class konadl:
             soup = BeautifulSoup(page_source, "html.parser")
             for link in soup.findAll('a', href=True):
                 if re.match('/post/show/[0-9]*', link['href']):
-                    download_queue.put(link['href'])
+                    download_queue.put((link['href'], page))
             post_queue.task_done()
 
     def print_crawling_page(self, page):
@@ -324,6 +355,47 @@ class konadl:
         """
         print('[libkonadl] {} thread exiting'.format(name))
 
+    def save_progress(self):
+        progress = configparser.ConfigParser()
+        progress['PAGES'] = {}
+        progress['CURRENTDOWNLOAD'] = {}
+        progress['CURRENTPAGE'] = {}
+        progress['RATINGS'] = {}
+
+        if self.crawl_all:
+            progress['PAGES']['pages'] = 'all'
+        else:
+            progress['PAGES']['pages'] = str(self.pages)
+        download, page = self.download_queue.get(False)
+        progress['CURRENTPAGE']['page'] = str(page)
+        progress['CURRENTDOWNLOAD']['download'] = download
+        self.download_queue.task_done()
+        progress['RATINGS']['safe'] = str(self.safe)
+        progress['RATINGS']['questionable'] = str(self.questionable)
+        progress['RATINGS']['explicit'] = str(self.explicit)
+
+        with open(self.progress_file, 'w') as progressf:
+            progress.write(progressf)
+
+    def read_progress(self):
+        try:
+            progress = configparser.ConfigParser()
+            progress.read(self.progress_file)
+            pages = progress['PAGES']['pages']
+            page = int(progress['CURRENTPAGE']['page'])
+            download = progress['CURRENTDOWNLOAD']['download']
+            self.safe = bool(progress['RATINGS']['safe'])
+            self.questionable = bool(progress['RATINGS']['questionable'])
+            self.explicit = bool(progress['RATINGS']['explicit'])
+            return pages, page, download
+        except KeyError:
+            self.print_faulty_progress_file()
+            exit(1)
+
+    def print_faulty_progress_file(self):
+        print('Error: Faulty progress file!')
+        print('Aborting\n')
+
 
 if __name__ == '__main__':
     """ Sample crawling
@@ -333,16 +405,31 @@ if __name__ == '__main__':
     for demonstration.
     """
     kona = konadl()  # Create crawler object
-    kona.storage = '/tmp/konachan/'  # note there's a '/' at the end
 
-    kona.yandere = False  # If you want to crawl yande.re
+    # Set storage directory
+    # Note that there's a "/" and the end
+    kona.storage = '/tmp/konachan/'
+    if not os.path.isdir(kona.storage):  # Quit if storage directory not found
+        print('Error: storage directory not found')
+        exit(1)
 
-    # Set rating settings
-    kona.safe = True
-    kona.explicit = False
-    kona.questionable = False
+    # Set this to True If you want to crawl yande.re
+    kona.yandere = False
+
+    # Download images by ratings
+    kona.safe = True            # Include safe rated images
+    kona.questionable = False   # Include questionable rated images
+    kona.explicit = False       # Include explicit rated images
+
+    # Set crawler and downloader threads
     kona.post_crawler_threads_amount = 10
     kona.downloader_threads_amount = 20
-    kona.crawl(1)  # Execute. Crawl 10 pages
-    print('\nKonachan Downloader main thread exited without errors')
+    kona.pages = 3  # Crawl 3 pages
+    if os.path.isfile(kona.progress_file):
+        print('Loading downloading progress')
+        kona.load_progress = True
+
+    # Execute
+    kona.crawl()
+    print('\nMain thread exited without errors')
     print('Time taken: {} seconds'.format(round((time.time() - kona.begin_time), 5)))
