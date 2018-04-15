@@ -92,7 +92,7 @@ class konadl:
         url and defines image storage folder.
         """
         self.begin_time = time.time()
-        self.VERSION = '1.4.1'
+        self.VERSION = '1.5'
         self.storage = '/tmp/konachan/'
         self.pages = False
         self.crawl_all = False
@@ -197,12 +197,13 @@ class konadl:
                         continue
                 time.sleep(1)
                 break
+
+            return True  # Job entirely done
         except (KeyboardInterrupt, SystemExit):
             # Main thread catches KeyboardInterrupt
             # Clear queues and put None as exit signal
             self.warn_keyboard_interrupt()
             if not self.download_queue.empty():
-                self.print_saving_progress()
                 self.save_progress()
             self.post_queue.queue.clear()
             for _ in range(self.post_crawler_threads_amount):
@@ -210,6 +211,7 @@ class konadl:
             self.download_queue.queue.clear()
             for _ in range(self.downloader_threads_amount):
                 self.download_queue.put((None, None))
+            return False  # Job paused
 
     def crawl_page(self, page_num):
         """ [OUTDATED] Crawl a specific page
@@ -234,7 +236,7 @@ class konadl:
         index_page = self.get_page('{}/post?page=1&tags='.format(self.site_root))
         index_soup = BeautifulSoup(index_page, "html.parser")
         self.pages = int(index_soup.findAll('a', href=True)[-10].text)
-        self.crawl()
+        return self.crawl()
 
     def get_page_rating(self, content):
         """ Get page rating
@@ -335,6 +337,7 @@ class konadl:
             post_queue.task_done()
 
     def save_progress(self):
+        self.print_saving_progress()
         progress = configparser.ConfigParser()
         progress['PAGES'] = {}
         progress['CURRENTDOWNLOAD'] = {}
@@ -357,6 +360,7 @@ class konadl:
             progress.write(progressf)
 
     def read_progress(self):
+        self.print_loading_progress()
         try:
             progress = configparser.ConfigParser()
             progress.read(self.progress_file)
@@ -373,27 +377,22 @@ class konadl:
 
     @print_locker
     def warn_keyboard_interrupt(self):
-        """ Tells the user that Ctrl^C is caught
-        This method can be overwritten in CLI for
-        better appearance
-        """
+        # Tells the user that Ctrl^C is caught
         print('[Main Thread] KeyboardInterrupt Caught!')
         print('[Main Thread] Flushing queues and exiting')
 
     @print_locker
     def print_saving_progress(self):
-        """ Tells the user progress is being saved
-        This method can be overwritten in CLI for
-        better appearance
-        """
-        print('[Main Thread] Saving progress')
+        # Tells the user that the progress is being saved
+        print('[Main Thread] Saving progress to {}'.format(self.progress_file))
+
+    def print_loading_progress(self):
+        # Tells the user that the progress is being loaded
+        print('[Main Thread] Loading progress from {}'.format(self.progress_file))
 
     @print_locker
     def print_retrieval(self, url, page):
-        """ Print retrieval information
-        This method can be overwritten in CLI for
-        better appearance
-        """
+        # Print retrieval information
         hour = datetime.datetime.now().time().hour
         minute = datetime.datetime.now().time().minute
         second = datetime.datetime.now().time().second
@@ -401,20 +400,17 @@ class konadl:
 
     @print_locker
     def print_crawling_page(self, page):
-        """ Print which page is being crawled
-        This method can be overwritten in CLI for
-        better appearance
-        """
+        # Print which page is being crawled
         print('Crawling page {}'.format(page))
 
     @print_locker
     def print_thread_exit(self, name):
-        """Thread exiting message
-        """
+        # Thread exiting message
         print('[libkonadl] {} thread exiting'.format(name))
 
     @print_locker
     def print_faulty_progress_file(self):
+        # Tell the use the progress file is faulty
         print('Error: Faulty progress file!')
         print('Aborting\n')
 
@@ -447,11 +443,16 @@ if __name__ == '__main__':
     kona.post_crawler_threads_amount = 10
     kona.downloader_threads_amount = 20
     kona.pages = 3  # Crawl 3 pages
+
+    if '/' not in kona.progress_file.replace('\\', '/'):
+        kona.progress_file = kona.storage + kona.progress_file
+
     if os.path.isfile(kona.progress_file):
-        print('Loading downloading progress')
         kona.load_progress = True
 
     # Execute
     kona.crawl()
     print('\nMain thread exited without errors')
+    if os.path.isfile(kona.progress_file):
+        os.remove(kona.progress_file)
     print('Time taken: {} seconds'.format(round((time.time() - kona.begin_time), 5)))
