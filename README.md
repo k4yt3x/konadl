@@ -1,7 +1,7 @@
 # Konachan Downloader
 
-#### libkonadl Version: 1.4
-#### KonaDL CLI Version: 1.2
+#### libkonadl Version: 1.4.1
+#### KonaDL CLI Version: 1.2.1
 
 </br>
 
@@ -16,6 +16,7 @@ Just preventing people from missing this.
 
 ### Current Version Changes
 
+1. Added print lock to prevent printing formating error
 1. User can now continue from where they left off
    + Progress will be saved when download queue not empty
    + KonaDL CLI automatically detects if progress file is present
