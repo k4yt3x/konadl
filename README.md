@@ -1,12 +1,13 @@
 # Konachan Downloader
 
-#### libkonadl Version: 1.3.1
+#### libkonadl Version: 1.3.2
 #### KonaDL CLI Version: 1.1
 
 </br>
 
 ### Current Version Changes
 
+1. libkonadl can now handle ctrl+c properly and exit gracefully
 1. Added **multithreading**
 1. Added KonaDL CLI for Linux and Windows
 1. Improved libkonadl for better performance
