@@ -10,7 +10,7 @@ Licensed under the GNU General Public License Version 3 (GNU GPL v3),
 (C) 2018 K4YT3X
 """
 
-from libkonadl import konadl  # Import konadl library
+from libkonadl import konadl  # Import libkonadl
 import avalon_framework as avalon
 import argparse
 import os
@@ -22,7 +22,7 @@ VERSION = '1.1'
 def process_arguments():
     """This function parses all arguments
 
-    Users can customize the behavior of konadl using
+    Users can customize the behavior of libkonadl using
     commandline arguments
     """
     parser = argparse.ArgumentParser()
@@ -122,6 +122,10 @@ class konadl_linux(konadl):
     appearance and readability.
     """
 
+    def warn_keyboard_interrupt(self):
+        avalon.warning('[Main Thread] KeyboardInterrupt Caught!')
+        avalon.warning('[Main Thread] Flushing queues and exiting')
+
     def print_retrieval(self, url):
         avalon.dbgInfo("Retrieving: {}".format(url))
 
@@ -179,10 +183,10 @@ try:
         elif args.page:
             kona.crawl_page(args.page)
 
-    avalon.info('Konachan Downloader finished successfully\n')
+    avalon.info('Konachan Downloader main thread exited without errors\n')
 
 except KeyboardInterrupt:
-    avalon.warning('Ctrl+C detected')
+    avalon.warning('Ctrl+C detected in CLI Module')
     avalon.warning('Exiting program\n')
     exit(0)
 except Exception:
