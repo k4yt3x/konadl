@@ -17,7 +17,7 @@ import argparse
 import os
 import traceback
 
-VERSION = '1.2.1'
+VERSION = '1.3'
 
 
 def process_arguments():
@@ -131,10 +131,13 @@ class konadl_avalon(konadl):
 
     @print_locker
     def print_saving_progress(self):
-        avalon.info('[Main Thread] Saving progress')
+        avalon.info('[Main Thread] Saving progress to {}{}{}'.format(avalon.FG.W, avalon.FM.BD, self.progress_file))
+
+    def print_loading_progress(self):
+        avalon.info('[Main Thread] Loading progress from {}{}{}'.format(avalon.FG.W, avalon.FM.BD, self.progress_file))
 
     @print_locker
-    def print_retrieval(self, page, url):
+    def print_retrieval(self, url, page):
         avalon.dbgInfo("[Page={}] Retrieving: {}".format(page, url))
 
     @print_locker
@@ -167,22 +170,25 @@ try:
             print('Contact: k4yt3x@protonmail.com\n')
             exit(0)
 
-        # If progress file exists
-        # Ask user if he or she wants to load it
-        load_progress = False
-        if os.path.isfile(args.progress):
-            avalon.info('Progress file found')
-            if avalon.ask('Continue from where you left off?', True):
-                kona.load_progress = True
-                kona.progress_file = args.progress
-                load_progress = True
-            else:
-                avalon.info('Creating new download profile')
-
         kona.storage = check_storage_dir(args)
         if kona.storage is False:
             avalon.error('Please specify storage directory\n')
             exit(1)
+
+        # If progress file exists
+        # Ask user if he or she wants to load it
+        load_progress = False
+        if '/' not in args.progress.replace('\\', '/'):
+            if '/' not in kona.progress_file.replace('\\', '/'):
+                kona.progress_file = kona.storage + args.progress
+        if os.path.isfile(kona.progress_file):
+            avalon.info('Progress file found')
+            if avalon.ask('Continue from where you left off?', True):
+                kona.load_progress = True
+                load_progress = True
+            else:
+                avalon.info('Creating new download profile')
+
         kona.yandere = args.yandere
         kona.safe = args.safe
         kona.questionable = args.questionable
@@ -208,17 +214,22 @@ try:
             print('  -p PAGE, --page PAGE  Crawl a specific page')
             print('Use --help for more information\n' + avalon.FM.RST)
 
+        job_done = False
         if load_progress:
-            kona.crawl()
+            job_done = kona.crawl()
         elif args.pages:
             kona.pages = args.pages
-            kona.crawl()
+            job_done = kona.crawl()
         elif args.all:
-            kona.crawl_all_pages()
+            job_done = kona.crawl_all_pages()
         elif args.page:
-            kona.crawl_page(args.page)
+            job_done = kona.crawl_page(args.page)
 
-    avalon.info('Main thread exited without errors\n')
+        avalon.info('Main thread exited without errors\n')
+        if os.path.isfile(kona.progress_file) and job_done:
+            avalon.info('All downloads complete')
+            avalon.info('Removing progress file\n')
+            os.remove(kona.progress_file)
 
 except KeyboardInterrupt:
     avalon.warning('Ctrl+C detected in CLI Module')
