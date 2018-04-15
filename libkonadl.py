@@ -36,11 +36,11 @@ def self_recovery(function):
     """ Fail-safe when program fails
 
     This function should be used with the decorator
-    @self_recovery only. Using this decoratorwill enable
+    @self_recovery only. Using this decorator will enable
     the ability for the decorated function to keep retrying
     until error is resolved.
 
-    This funciton is made since konachan may ban requests. This is
+    This function is made since konachan may ban requests. This is
     especially useful when using crawl_all
     """
 
@@ -76,7 +76,7 @@ class konadl:
         url and defines image storage folder.
         """
         self.begin_time = time.time()
-        self.VERSION = '1.3.1'
+        self.VERSION = '1.3.2'
         self.storage = '/tmp/konachan/'
         self.yandere = False  # Use Yande.re website
         self.safe = True
@@ -84,6 +84,7 @@ class konadl:
         self.questionable = False
         self.post_crawler_threads_amount = 10
         self.downloader_threads_amount = 20
+        self.logging = True
 
     def icon(self):
         print('     _   __                       ______  _')
@@ -125,40 +126,59 @@ class konadl:
         page_threads = []
         downloader_threads = []
 
-        # Create post crawler threads
-        for identifier in range(self.post_crawler_threads_amount):
-            thread = threading.Thread(target=self.crawl_post_page_worker, args=(post_queue, download_queue))
-            thread.name = 'Post Crawler {}'.format(identifier)
-            thread.start()
-            page_threads.append(thread)
+        try:
+            # Create post crawler threads
+            for identifier in range(self.post_crawler_threads_amount):
+                thread = threading.Thread(target=self.crawl_post_page_worker, args=(post_queue, download_queue))
+                thread.name = 'Post Crawler {}'.format(identifier)
+                thread.start()
+                page_threads.append(thread)
 
-        # Create image downloader threads
-        for identifier in range(self.downloader_threads_amount):
-            thread = threading.Thread(target=self.retrieve_post_image_worker, args=(download_queue,))
-            thread.name = 'Downloader {}'.format(identifier)
-            thread.start()
-            downloader_threads.append(thread)
+            # Create image downloader threads
+            for identifier in range(self.downloader_threads_amount):
+                thread = threading.Thread(target=self.retrieve_post_image_worker, args=(download_queue,))
+                thread.name = 'Downloader {}'.format(identifier)
+                thread.start()
+                downloader_threads.append(thread)
 
-        # Every page is a job in the queue
-        for page_num in range(1, total_pages + 1):
-            post_queue.put(page_num)
+            # Every page is a job in the queue
+            for page_num in range(1, total_pages + 1):
+                post_queue.put(page_num)
 
-        post_queue.join()
-        download_queue.join()
-        for _ in range(self.post_crawler_threads_amount):
-            post_queue.put(None)
-        for _ in range(self.downloader_threads_amount):
-            download_queue.put(None)
+            post_queue.join()
+            download_queue.join()
+            for _ in range(self.post_crawler_threads_amount):
+                post_queue.put(None)
+            for _ in range(self.downloader_threads_amount):
+                download_queue.put(None)
 
-        while True:
-            for thread in page_threads:
-                if thread.is_alive():
-                    continue
-            for thread in downloader_threads:
-                if thread.is_alive():
-                    continue
-            time.sleep(1)
-            break
+            while True:
+                for thread in page_threads:
+                    if thread.is_alive():
+                        continue
+                for thread in downloader_threads:
+                    if thread.is_alive():
+                        continue
+                time.sleep(1)
+                break
+        except (KeyboardInterrupt, SystemExit):
+            # Main thread catches KeyboardInterrupt
+            # Clear queues and put None as exit signal
+            self.warn_keyboard_interrupt()
+            post_queue.queue.clear()
+            for _ in range(self.post_crawler_threads_amount):
+                post_queue.put(None)
+            download_queue.queue.clear()
+            for _ in range(self.downloader_threads_amount):
+                download_queue.put(None)
+
+    def warn_keyboard_interrupt(self):
+        """ Tells the user that Ctrl^C is caught
+        This method can be overwritten in CLI for
+        better appearance
+        """
+        print('[Main Thread] KeyboardInterrupt Caught!')
+        print('[Main Thread] Flushing queues and exiting')
 
     def crawl_page(self, page_num):
         """ Crawl a specific page
@@ -323,6 +343,6 @@ if __name__ == '__main__':
     kona.questionable = False
     kona.post_crawler_threads_amount = 10
     kona.downloader_threads_amount = 20
-    kona.crawl(10)  # Execute. Crawl 10 pages
-    print('\nKonachan Downloader finished successfully')
+    kona.crawl(1)  # Execute. Crawl 10 pages
+    print('\nKonachan Downloader main thread exited without errors')
     print('Time taken: {} seconds'.format(round((time.time() - kona.begin_time), 5)))
