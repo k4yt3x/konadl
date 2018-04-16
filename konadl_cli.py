@@ -12,12 +12,13 @@ Licensed under the GNU General Public License Version 3 (GNU GPL v3),
 
 from libkonadl import konadl  # Import libkonadl
 from libkonadl import print_locker
-import avalon_framework as avalon
 import argparse
+import avalon_framework as avalon
 import os
+import time
 import traceback
 
-VERSION = '1.3'
+VERSION = '1.3.1'
 
 
 def process_arguments():
@@ -149,6 +150,18 @@ class konadl_avalon(konadl):
         avalon.dbgInfo('[libkonadl] {} thread exiting'.format(name))
 
     @print_locker
+    def print_429(self):
+        avalon.error('HTTP Error 429: You are sending too many requests')
+        avalon.warning('Trying to recover from error')
+        avalon.warning('Putting job back to queue')
+
+    @print_locker
+    def print_exception(self):
+        avalon.error('An error has occurred in this thread')
+        avalon.warning('Trying to recover from error')
+        avalon.warning('Putting job back to queue')
+
+    @print_locker
     def print_faulty_progress_file(self):
         avalon.error('Faulty progress file!')
         avalon.error('Aborting\n')
@@ -226,6 +239,7 @@ try:
             job_done = kona.crawl_page(args.page)
 
         avalon.info('Main thread exited without errors\n')
+        avalon.info('Time taken: {} seconds'.format(round((time.time() - kona.begin_time), 5)))
         if os.path.isfile(kona.progress_file) and job_done:
             avalon.info('All downloads complete')
             avalon.info('Removing progress file\n')
