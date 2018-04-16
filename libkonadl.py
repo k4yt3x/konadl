@@ -34,34 +34,6 @@ import traceback
 import urllib.request
 
 
-def self_recovery(function):
-    """ Fail-safe when program fails
-
-    This function should be used with the decorator
-    @self_recovery only. Using this decorator will enable
-    the ability for the decorated function to keep retrying
-    until error is resolved.
-
-    This function is made since konachan may ban requests. This is
-    especially useful when using crawl_all
-    """
-
-    def wrapper(*args):
-        while True:
-            try:
-                return function(*args)
-            except FileNotFoundError:
-                print('Error: Storage directory not found!')
-                exit(1)
-            except OSError as e:
-                traceback.print_exc()
-                hour = datetime.datetime.now().time().hour
-                minute = datetime.datetime.now().time().minute
-                second = datetime.datetime.now().time().second
-                print('[{}:{}:{}] Socket error detected. Retrying.....'.format(hour, minute, second), end='\r')
-    return wrapper
-
-
 def print_locker(function):
     """ Prevents printing formating error
 
@@ -92,7 +64,7 @@ class konadl:
         url and defines image storage folder.
         """
         self.begin_time = time.time()
-        self.VERSION = '1.5'
+        self.VERSION = '1.6'
         self.storage = '/tmp/konachan/'
         self.pages = False
         self.crawl_all = False
@@ -105,6 +77,7 @@ class konadl:
         self.logging = True
         self.load_progress = False
         self.progress_file = 'konadl.progress'
+        self.error_logs_file = False
 
     def icon(self):
         print('     _   __                       ______  _')
@@ -115,7 +88,24 @@ class konadl:
         print('    \_| \_/ \___/ |_| |_| \__,_|  |___/  \_____/\n')
         print('            Konachan Downloader Library')
         spaces = ((44 - len('Kernel Version ' + self.VERSION)) // 2) * ' '
-        print(spaces + '    Kernel Version ' + self.VERSION + '\n')
+        print(spaces + '   Kernel Version ' + self.VERSION + '\n')
+
+    def write_traceback(self, uri=False, page=False):
+        # print error to screen
+        traceback.print_exc()
+        # writes error to log
+        if self.error_logs_file:
+            self.error_log_lock.acquire()
+            with open(self.error_logs_file, 'a+') as error_file:
+                error_file.write('TIME={}\n'.format(str(datetime.datetime.now())))
+                if page:
+                    error_file.write('PAGE={}\n'.format(page))
+                if uri:
+                    error_file.write('URI={}\n'.format(uri))
+                traceback.print_exc(file=error_file)
+                error_file.write('\n')
+                error_file.close()
+            self.error_log_lock.release()
 
     def process_crawling_options(self):
         """ Processes crawling options
@@ -157,6 +147,7 @@ class konadl:
         self.downloader_threads = []
 
         self.print_lock = threading.Lock()
+        self.error_log_lock = threading.Lock()
 
         try:
             # Create post crawler threads
@@ -253,7 +244,6 @@ class konadl:
         else:
             return False
 
-    @self_recovery
     def get_page(self, url):
         """ Get page using urllib.request
         Custom UA is provided to prevent unwanted bans
@@ -270,7 +260,6 @@ class konadl:
         with urllib.request.urlopen(req) as response:
             return response.read()
 
-    @self_recovery
     def download_file(self, url, page, file_name):
         """ Download file
 
@@ -282,7 +271,6 @@ class konadl:
         file_path = self.storage + file_name + '.' + suffix
         urllib.request.urlretrieve(url, file_path)
 
-    @self_recovery
     def retrieve_post_image_worker(self, download_queue):
         """ Get the large image url and download
 
@@ -290,32 +278,43 @@ class konadl:
         and calls the downloader to download all of them.
         """
         while True:
-            uri, page = download_queue.get()
-            if uri is None:
-                self.print_thread_exit(str(threading.current_thread().name))
-                break
-            image_page_source = self.get_page(self.site_root + uri)
-            rating = self.get_page_rating(image_page_source.decode('utf-8'))
+            try:
+                uri, page = download_queue.get()
+                if uri is None:
+                    self.print_thread_exit(str(threading.current_thread().name))
+                    break
+                image_page_source = self.get_page(self.site_root + uri)
+                rating = self.get_page_rating(image_page_source.decode('utf-8'))
 
-            if self.safe and rating == 'safe':
-                pass
-            elif self.questionable and rating == 'questionable':
-                pass
-            elif self.explicit and rating == 'explicit':
-                pass
-            else:
-                download_queue.task_done()
-                continue
-
-            image_soup = BeautifulSoup(image_page_source, "html.parser")
-            for link in image_soup.findAll('img', {'class': 'image'}):
-                if 'https:' not in link['src']:
-                    self.download_file('https:' + link['src'], page, uri.split("/")[-1])
+                if self.safe and rating == 'safe':
+                    pass
+                elif self.questionable and rating == 'questionable':
+                    pass
+                elif self.explicit and rating == 'explicit':
+                    pass
                 else:
-                    self.download_file(link['src'], page, uri.split("/")[-1])
-            download_queue.task_done()
+                    download_queue.task_done()
+                    continue
 
-    @self_recovery
+                image_soup = BeautifulSoup(image_page_source, "html.parser")
+                for link in image_soup.findAll('img', {'class': 'image'}):
+                    if 'https:' not in link['src']:
+                        self.download_file('https:' + link['src'], page, uri.split("/")[-1])
+                    else:
+                        self.download_file(link['src'], page, uri.split("/")[-1])
+                download_queue.task_done()
+            except urllib.error.HTTPError as e:
+                self.write_traceback(page=page)
+                if e.code == 429:
+                    self.print_429()
+                download_queue.task_done()
+                download_queue.put((uri, page))
+            except Exception:
+                self.write_traceback(uri=uri, page=page)
+                self.print_exception()
+                download_queue.task_done()
+                download_queue.put((uri, page))
+
     def crawl_post_page_worker(self, post_queue, download_queue):
         """ Crawl the post list page and find posts
 
@@ -323,18 +322,29 @@ class konadl:
         url before handing them to the image downloader.
         """
         while True:
-            page = post_queue.get()
-            if page is None:
-                self.print_thread_exit(str(threading.current_thread().name))
-                break
-            self.print_crawling_page(page)
-
-            page_source = self.get_page('{}/post?page={}&tags='.format(self.site_root, page))
-            soup = BeautifulSoup(page_source, "html.parser")
-            for link in soup.findAll('a', href=True):
-                if re.match('/post/show/[0-9]*', link['href']):
-                    download_queue.put((link['href'], page))
-            post_queue.task_done()
+            try:
+                page = post_queue.get()
+                if page is None:
+                    self.print_thread_exit(str(threading.current_thread().name))
+                    break
+                self.print_crawling_page(page)
+                page_source = self.get_page('{}/post?page={}&tags='.format(self.site_root, page))
+                soup = BeautifulSoup(page_source, "html.parser")
+                for link in soup.findAll('a', href=True):
+                    if re.match('/post/show/[0-9]*', link['href']):
+                        download_queue.put((link['href'], page))
+                post_queue.task_done()
+            except urllib.error.HTTPError as e:
+                self.write_traceback(page=page)
+                if e.code == 429:
+                    self.print_429()
+                post_queue.task_done()
+                post_queue.put(page)
+            except Exception:
+                self.write_traceback(page=page)
+                self.print_exception()
+                post_queue.task_done()
+                post_queue.put(page)
 
     def save_progress(self):
         self.print_saving_progress()
@@ -396,7 +406,7 @@ class konadl:
         hour = datetime.datetime.now().time().hour
         minute = datetime.datetime.now().time().minute
         second = datetime.datetime.now().time().second
-        print("[{}:{}:{}] [Page={}]Retrieving: {}".format(hour, minute, second, page, url))
+        print("[{}:{}:{}] [Page={}] Retrieving: {}".format(hour, minute, second, page, url))
 
     @print_locker
     def print_crawling_page(self, page):
@@ -407,6 +417,20 @@ class konadl:
     def print_thread_exit(self, name):
         # Thread exiting message
         print('[libkonadl] {} thread exiting'.format(name))
+
+    @print_locker
+    def print_429(self):
+        # HTTP returns 429
+        print('HTTP Error 429: You are sending too many requests')
+        print('Trying to recover from error')
+        print('Putting job back to queue')
+
+    @print_locker
+    def print_exception(self):
+        # Any exception
+        print('An error has occurred in this thread')
+        print('Trying to recover from error')
+        print('Putting job back to queue')
 
     @print_locker
     def print_faulty_progress_file(self):
@@ -435,9 +459,9 @@ if __name__ == '__main__':
     kona.yandere = False
 
     # Download images by ratings
-    kona.safe = True            # Include safe rated images
+    kona.safe = False            # Include safe rated images
     kona.questionable = False   # Include questionable rated images
-    kona.explicit = False       # Include explicit rated images
+    kona.explicit = True       # Include explicit rated images
 
     # Set crawler and downloader threads
     kona.post_crawler_threads_amount = 10
@@ -449,6 +473,8 @@ if __name__ == '__main__':
 
     if os.path.isfile(kona.progress_file):
         kona.load_progress = True
+
+    kona.error_logs_file = '/tmp/errors.log'
 
     # Execute
     kona.crawl()
