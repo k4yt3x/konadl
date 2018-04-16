@@ -1,7 +1,7 @@
 # Konachan Downloader
 
-#### libkonadl Version: 1.5
-#### KonaDL CLI Version: 1.3
+#### libkonadl Version: 1.6
+#### KonaDL CLI Version: 1.3.1
 
 </br>
 
@@ -9,12 +9,23 @@
 
 Just preventing people from missing this.
 
-**You can press Ctrl+C at any time to pause the download.**  
++ **You can press Ctrl+C at any time to pause the download.**  
 **The progress will be saved and you will be prompted automatically to continue the next time you launch the program.**
++ **The program can now recover itself from all kinds of errors and continue downloading**  
+**Examples:**
+   + Temporary network issues
+   + Temporary server-side situations
 
 </br>
 
 ### Current Version Changes
+
+1. The program can now recover itself from all kinds of errors and continue downloading  
+Examples:
+   + Temporary network issues
+   + Temporary server-side situations
+
+### Recent Changes
 
 1. Progress file is now stored in the storage directory
 1. Added print lock to prevent printing formating error
@@ -22,9 +33,6 @@ Just preventing people from missing this.
    + Progress will be saved when download queue not empty
    + KonaDL CLI automatically detects if progress file is present
 1. Minor changes to the libkonadl API
-
-### Recent Changes
-
 1. Added self-recovery when exception caught
 1. libkonadl can now handle ctrl+c properly and exit gracefully
 1. Added **multithreading**
