@@ -3,7 +3,7 @@
 """
 Name: Konachan Downloader CLI for Linux
 Date Created: 13 Apr. 2018
-Last Modified: 13 Apr. 2018
+Last Modified: 18 Apr. 2018
 
 Licensed under the GNU General Public License Version 3 (GNU GPL v3),
     available at: https://www.gnu.org/licenses/gpl-3.0.txt
@@ -122,7 +122,8 @@ def display_options(kona, load_progress):
 
 class konadl_avalon(konadl):
     """ Overwrite original methods for better
-    appearance and readability.
+    appearance and readability using avalon
+    framework.
     """
 
     @print_locker
@@ -202,6 +203,7 @@ try:
             else:
                 avalon.info('Creating new download profile')
 
+        # Pass terminal arguments to libkonadl object
         kona.yandere = args.yandere
         kona.safe = args.safe
         kona.questionable = args.questionable
@@ -244,7 +246,9 @@ try:
             avalon.info('All downloads complete')
             avalon.info('Removing progress file\n')
             os.remove(kona.progress_file)
-
+    else:
+        avalon.error('This file cannot be imported as a module!')
+        raise SystemError('Cannot be imported')
 except KeyboardInterrupt:
     avalon.warning('Ctrl+C detected in CLI Module')
     avalon.warning('Exiting program\n')

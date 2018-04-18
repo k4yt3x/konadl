@@ -12,7 +12,7 @@
 Name: Konachan Downloader Library
 Dev: K4YT3X
 Date Created: 11 Apr. 2018
-Last Modified: 13 Apr. 2018
+Last Modified: 18 Apr. 2018
 
 Licensed under the GNU General Public License Version 3 (GNU GPL v3),
     available at: https://www.gnu.org/licenses/gpl-3.0.txt
@@ -61,7 +61,7 @@ class konadl:
         """ Initialize crawler
 
         This method initializes the crawler, defines site root
-        url and defines image storage folder.
+        URL and defines image storage folder.
         """
         self.begin_time = time.time()
         self.VERSION = '1.6'
@@ -91,6 +91,12 @@ class konadl:
         print(spaces + '   Kernel Version ' + self.VERSION + '\n')
 
     def write_traceback(self, uri=False, page=False):
+        """ Records traceback information
+
+        This method prints the error message to screen and
+        writes the full traceback information to error log
+        if self.error_logs_file is defined.
+        """
         # print error to screen
         traceback.print_exc()
         # writes error to log
@@ -172,8 +178,10 @@ class konadl:
                 for page_num in range(1, self.pages + 1):
                     self.post_queue.put(page_num)
 
+            # Wait for all jobs to be done
             self.post_queue.join()
             self.download_queue.join()
+            # Send exit signal to all threads
             for _ in range(self.post_crawler_threads_amount):
                 self.post_queue.put(None)
             for _ in range(self.downloader_threads_amount):
@@ -224,8 +232,10 @@ class konadl:
         """
         self.crawl_all = True
         self.process_crawling_options()
+        # Crawl the first post page and read the number of total pages
         index_page = self.get_page('{}/post?page=1&tags='.format(self.site_root))
         index_soup = BeautifulSoup(index_page, "html.parser")
+        # Find the page number of the last page
         self.pages = int(index_soup.findAll('a', href=True)[-10].text)
         return self.crawl()
 
@@ -286,6 +296,7 @@ class konadl:
                 image_page_source = self.get_page(self.site_root + uri)
                 rating = self.get_page_rating(image_page_source.decode('utf-8'))
 
+                # Determine if the current page is desired to be downloaded
                 if self.safe and rating == 'safe':
                     pass
                 elif self.questionable and rating == 'questionable':
@@ -319,7 +330,7 @@ class konadl:
         """ Crawl the post list page and find posts
 
         Craws the posts index pages and record every post's
-        url before handing them to the image downloader.
+        URL before handing them to the image downloader.
         """
         while True:
             try:
@@ -347,6 +358,19 @@ class konadl:
                 post_queue.put(page)
 
     def save_progress(self):
+        """ Saves the download progress
+
+        TODO: find a more accurate method of recording
+        the download progress. The current method is not
+        accurate if an error has occurred during the
+        download or if the page order in download queue
+        is complete.
+
+        The better way might be writing everything in
+        memory (download_queue, post_queue, etc.) to
+        the progress file, which everything can be recovered
+        accurately.
+        """
         self.print_saving_progress()
         progress = configparser.ConfigParser()
         progress['PAGES'] = {}
@@ -370,6 +394,11 @@ class konadl:
             progress.write(progressf)
 
     def read_progress(self):
+        """ Reads the download progress
+
+        Parses the download progress and returns
+        the configuration file contents.
+        """
         self.print_loading_progress()
         try:
             progress = configparser.ConfigParser()
