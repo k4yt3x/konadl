@@ -5,7 +5,7 @@ KonaDL CLI Version: **1.3.1**
 
 </br>
 
-## Important Feature
+## Important Features
 
 Just preventing people from missing this.
 
@@ -24,6 +24,8 @@ Just preventing people from missing this.
 Examples:
    + Temporary network issues
    + Temporary server-side situations
+
+![konadl_cli](https://user-images.githubusercontent.com/21986859/38762615-bb0269a4-3f5b-11e8-895d-0eb197a3de8f.png)
 
 ### Recent Changes
 
@@ -51,11 +53,6 @@ Examples:
 KonaDL CLI is a standalone application that uses libkonadl to bulk download images from konachan.com / konachan.net / yande.re. It provides better user interface comparing to libkonadl, but it cannot be used as a library.
 
 libkonadl is a library that helps you bulk downloading images according to ratings (Safe/Questionable/Explicit) from konachan.com / konachan.net / yande.re with multithreading. It can also run as a standalone program that can run directly on any platform that supports python (at least according to the current design).
-
-</br>
-
-## Screenshot(s)
-![konadl_cli](https://user-images.githubusercontent.com/21986859/38762615-bb0269a4-3f5b-11e8-895d-0eb197a3de8f.png)
 
 </br>
 
