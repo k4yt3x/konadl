@@ -1,6 +1,6 @@
 # Konachan Downloader
 
-Please read the [EULA](https://github.com/K4YT3X/KonaDL#eula) section carefully before starting to use this software.
+**Please read the [EULA](https://github.com/K4YT3X/KonaDL#eula) section carefully before starting to use this software.**
 
 libkonadl Version: **1.6.1**  
 KonaDL CLI Version: **1.3.1**
