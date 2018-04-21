@@ -1,7 +1,11 @@
 # Konachan Downloader
 
-libkonadl Version: **1.6**  
+**By using this software / library you agree to the [ToS](https://konachan.com/static/terms_of_service) of Konachan.com.**
+
+libkonadl Version: **1.6.1**  
 KonaDL CLI Version: **1.3.1**
+
+
 
 </br>
 
@@ -20,15 +24,16 @@ Just preventing people from missing this.
 
 ### Current Version Changes
 
-1. The program can now recover itself from all kinds of errors and continue downloading  
-Examples:
-   + Temporary network issues
-   + Temporary server-side situations
+1. **Images downloaded are now uncompressed original images**
+
 
 ![konadl_cli](https://user-images.githubusercontent.com/21986859/38762615-bb0269a4-3f5b-11e8-895d-0eb197a3de8f.png)
 
 ### Recent Changes
-
+1. The program can now recover itself from all kinds of errors and continue downloading  
+Examples:
+   + Temporary network issues
+   + Temporary server-side situations
 1. Progress file is now stored in the storage directory
 1. Added print lock to prevent printing formating error
 1. User can now continue from where they left off
