@@ -64,7 +64,7 @@ class konadl:
         URL and defines image storage folder.
         """
         self.begin_time = time.time()
-        self.VERSION = '1.6'
+        self.VERSION = '1.6.1'
         self.storage = '/tmp/konachan/'
         self.pages = False
         self.crawl_all = False
@@ -308,11 +308,11 @@ class konadl:
                     continue
 
                 image_soup = BeautifulSoup(image_page_source, "html.parser")
-                for link in image_soup.findAll('img', {'class': 'image'}):
-                    if 'https:' not in link['src']:
-                        self.download_file('https:' + link['src'], page, uri.split("/")[-1])
+                for link in image_soup.findAll('a', {'id': 'highres'}):
+                    if 'https:' not in link['href']:
+                        self.download_file('https:' + link['href'], page, uri.split("/")[-1])
                     else:
-                        self.download_file(link['src'], page, uri.split("/")[-1])
+                        self.download_file(link['href'], page, uri.split("/")[-1])
                 download_queue.task_done()
             except urllib.error.HTTPError as e:
                 self.write_traceback(page=page)
