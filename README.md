@@ -1,11 +1,9 @@
 # Konachan Downloader
 
-**By using this software / library you agree to the [ToS](https://konachan.com/static/terms_of_service) of Konachan.com.**
+Please read the [EULA](https://github.com/K4YT3X/KonaDL#eula) section carefully before starting to use this software.
 
 libkonadl Version: **1.6.1**  
 KonaDL CLI Version: **1.3.1**
-
-
 
 </br>
 
@@ -189,3 +187,15 @@ class konadl_avalon(konadl):
 # Create an object off of the modified class
 kona = konadl_avalon()
 ```
+
+
+## EULA
+By using the "konadl" software ("this software") you agree to this EULA. If you do not agree to the EULA, stop using this software immediately.
+
+- **By enabling crawling from [Konachan.com](Konachan.com) you agree to the [ToS of Konachan.com](https://konachan.com/static/terms_of_service).**  
+- **By enabling crawling from [Yande.re](Yande.re) you agree to the [ToS of Yande.re](https://yande.re/static/terms_of_service).**
+- You must respect the website requests (ex. stop the software when HTTP 429 is received).
+- You need to have the developer's permission before using this software for commercial purposes.
+- You must obey the law of the country which you are in.
+
+Just thought it would be fun to have an EULA.
