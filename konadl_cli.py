@@ -18,7 +18,7 @@ import os
 import time
 import traceback
 
-VERSION = '1.3.1'
+VERSION = '1.3.2'
 
 
 def process_arguments():
@@ -34,7 +34,6 @@ def process_arguments():
     control_group.add_argument('-p', '--page', help='Crawl a specific page', type=int, action='store', default=False)
     control_group.add_argument('-y', '--yandere', help='Crawl Yande.re site', action='store_true', default=False)
     control_group.add_argument('-o', '--storage', help='Storage directory', action='store', default=False)
-    control_group.add_argument('--progress', help='Specify progress file to load', action='store', default='konadl.progress')
     threading_group = parser.add_argument_group('Ratings')
     control_group.add_argument('-s', '--safe', help='Include Safe rated images', action='store_true', default=False)
     control_group.add_argument('-q', '--questionable', help='Include Questionable rated images', action='store_true', default=False)
@@ -133,10 +132,10 @@ class konadl_avalon(konadl):
 
     @print_locker
     def print_saving_progress(self):
-        avalon.info('[Main Thread] Saving progress to {}{}{}'.format(avalon.FG.W, avalon.FM.BD, self.progress_file))
+        avalon.info('[Main Thread] Saving progress to {}{}{}'.format(avalon.FG.W, avalon.FM.BD, self.storage))
 
     def print_loading_progress(self):
-        avalon.info('[Main Thread] Loading progress from {}{}{}'.format(avalon.FG.W, avalon.FM.BD, self.progress_file))
+        avalon.info('[Main Thread] Loading progress from {}{}{}'.format(avalon.FG.W, avalon.FM.BD, self.storage))
 
     @print_locker
     def print_retrieval(self, url, page):
@@ -192,10 +191,7 @@ try:
         # If progress file exists
         # Ask user if he or she wants to load it
         load_progress = False
-        if '/' not in args.progress.replace('\\', '/'):
-            if '/' not in kona.progress_file.replace('\\', '/'):
-                kona.progress_file = kona.storage + args.progress
-        if os.path.isfile(kona.progress_file):
+        if kona.progress_files_present():
             avalon.info('Progress file found')
             if avalon.ask('Continue from where you left off?', True):
                 kona.load_progress = True
@@ -242,10 +238,10 @@ try:
 
         avalon.info('Main thread exited without errors\n')
         avalon.info('Time taken: {} seconds'.format(round((time.time() - kona.begin_time), 5)))
-        if os.path.isfile(kona.progress_file) and job_done:
+        if kona.progress_files_present() and job_done:
             avalon.info('All downloads complete')
             avalon.info('Removing progress file\n')
-            os.remove(kona.progress_file)
+            kona.remove_progress_files()
     else:
         avalon.error('This file cannot be imported as a module!')
         raise SystemError('Cannot be imported')
