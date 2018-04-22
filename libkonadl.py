@@ -299,12 +299,10 @@ class konadl:
 
                 image_soup = BeautifulSoup(image_page_source, "html.parser")
                 for link in image_soup.findAll('a', {'id': 'highres'}):
-                    if 'https:' not in link['href']:
-                        image_request, file_path = self.download_file(
-                            'https:' + link['href'], page, uri.split("/")[-1])
-                    else:
-                        image_request, file_path = self.download_file(
-                            link['href'], page, uri.split("/")[-1])
+                    file_name = link['href'].split(
+                        "/")[-1].replace('%20', '_').replace('_-_', '_')
+                    image_request, file_path = self.download_file(
+                        link['href'], page, file_name)
                 if image_request.status_code != requests.codes.ok:
                     if image_request.status_code == 429:
                         self.print_429()
