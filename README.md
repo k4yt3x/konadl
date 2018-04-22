@@ -2,8 +2,8 @@
 
 **Please read the [EULA](https://github.com/K4YT3X/KonaDL#eula) section carefully before starting to use this software.**
 
-libkonadl Version: **1.6.1**  
-KonaDL CLI Version: **1.3.1**
+libkonadl Version: **1.7 beta1**  
+KonaDL CLI Version: **1.3.2**
 
 </br>
 
@@ -20,7 +20,12 @@ Just preventing people from missing this.
 
 </br>
 
-### Current Version Changes
+### Beta Version (1.7 beta1) Changes
+
+1. Advanced progress recording now available
+2. Fixed some existing progress recorder issues
+
+### Stable Version (1.6.1) Changes
 
 1. **Images downloaded are now uncompressed original images**
 
