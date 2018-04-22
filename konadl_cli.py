@@ -3,7 +3,7 @@
 """
 Name: Konachan Downloader CLI for Linux
 Date Created: 13 Apr. 2018
-Last Modified: 18 Apr. 2018
+Last Modified: 21 Apr. 2018
 
 Licensed under the GNU General Public License Version 3 (GNU GPL v3),
     available at: https://www.gnu.org/licenses/gpl-3.0.txt

@@ -12,7 +12,7 @@
 Name: Konachan Downloader Library
 Dev: K4YT3X
 Date Created: 11 Apr. 2018
-Last Modified: 18 Apr. 2018
+Last Modified: 22 Apr. 2018
 
 Licensed under the GNU General Public License Version 3 (GNU GPL v3),
     available at: https://www.gnu.org/licenses/gpl-3.0.txt
