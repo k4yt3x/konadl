@@ -31,7 +31,7 @@ import re
 import threading
 import time
 import traceback
-import urllib.request
+import requests
 
 
 def print_locker(function):
@@ -64,7 +64,7 @@ class konadl:
         URL and defines image storage folder.
         """
         self.begin_time = time.time()
-        self.VERSION = '1.7 beta1'
+        self.VERSION = '1.7 beta2'
         self.storage = '/tmp/konachan/'
         self.pages = False
         self.crawl_all = False
@@ -74,12 +74,11 @@ class konadl:
         self.questionable = False
         self.post_crawler_threads_amount = 10
         self.downloader_threads_amount = 20
-        self.logging = True
         self.load_progress = False
         self.error_logs_file = False
-        self.progress_files = ['{}download_queue.progress'.format(self.storage),
-                               '{}post_queue.progress'.format(self.storage),
-                               '{}settings.progress'.format(self.storage)]
+        self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+                        AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 \
+                        Safari/537.36'}
 
     def icon(self):
         print('     _   __                       ______  _')
@@ -105,7 +104,8 @@ class konadl:
         if self.error_logs_file:
             self.error_log_lock.acquire()
             with open(self.error_logs_file, 'a+') as error_file:
-                error_file.write('TIME={}\n'.format(str(datetime.datetime.now())))
+                error_file.write('TIME={}\n'.format(
+                    str(datetime.datetime.now())))
                 if page:
                     error_file.write('PAGE={}\n'.format(page))
                 if uri:
@@ -136,8 +136,7 @@ class konadl:
         "total_pages"
         """
         self.process_crawling_options()
-
-        # load progress from progress file if needed
+        self.error_logs_file = '{}errors.log'.format(self.storage)
 
         # Initialize page queue and downloader queue
         self.post_queue = queue.Queue()
@@ -149,20 +148,23 @@ class konadl:
         self.print_lock = threading.Lock()
         self.error_log_lock = threading.Lock()
 
+        # load progress from progress file if needed
         if self.load_progress:
             self.read_progress()
 
         try:
             # Create post crawler threads
             for identifier in range(self.post_crawler_threads_amount):
-                thread = threading.Thread(target=self.crawl_post_page_worker, args=(self.post_queue, self.download_queue))
+                thread = threading.Thread(target=self.crawl_post_page_worker, args=(
+                    self.post_queue, self.download_queue))
                 thread.name = 'Post Crawler {}'.format(identifier)
                 thread.start()
                 self.page_threads.append(thread)
 
             # Create image downloader threads
             for identifier in range(self.downloader_threads_amount):
-                thread = threading.Thread(target=self.retrieve_post_image_worker, args=(self.download_queue,))
+                thread = threading.Thread(
+                    target=self.retrieve_post_image_worker, args=(self.download_queue,))
                 thread.name = 'Downloader {}'.format(identifier)
                 thread.start()
                 self.downloader_threads.append(thread)
@@ -227,7 +229,8 @@ class konadl:
         self.crawl_all = True
         self.process_crawling_options()
         # Crawl the first post page and read the number of total pages
-        index_page = self.get_page('{}/post?page=1&tags='.format(self.site_root))
+        index_page = requests.get(
+            '{}/post?page=1&tags='.format(self.site_root), headers=self.headers).text
         index_soup = BeautifulSoup(index_page, "html.parser")
         # Find the page number of the last page
         self.pages = int(index_soup.findAll('a', href=True)[-10].text)
@@ -248,22 +251,6 @@ class konadl:
         else:
             return False
 
-    def get_page(self, url):
-        """ Get page using urllib.request
-        Custom UA is provided to prevent unwanted bans
-        """
-        req = urllib.request.Request(
-            url,
-            data=None,
-            headers={
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
-                AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 \
-                Safari/537.36'
-            }
-        )
-        with urllib.request.urlopen(req) as response:
-            return response.read()
-
     def download_file(self, url, page, file_name):
         """ Download file
 
@@ -271,9 +258,14 @@ class konadl:
         specified folder with its original name.
         """
         self.print_retrieval(url, page)
+
         suffix = url.split(".")[-1]
         file_path = self.storage + file_name + '.' + suffix
-        urllib.request.urlretrieve(url, file_path)
+        with requests.get(url, headers=self.headers) as image_request:
+            with open(file_path, 'wb') as file:
+                file.write(image_request.content)
+                file.close()
+            return image_request, file_path
 
     def retrieve_post_image_worker(self, download_queue):
         """ Get the large image url and download
@@ -282,13 +274,17 @@ class konadl:
         and calls the downloader to download all of them.
         """
         while True:
+            file_path = False
             try:
                 uri, page = download_queue.get()
                 if uri is None:
-                    self.print_thread_exit(str(threading.current_thread().name))
+                    self.print_thread_exit(
+                        str(threading.current_thread().name))
                     break
-                image_page_source = self.get_page(self.site_root + uri)
-                rating = self.get_page_rating(image_page_source.decode('utf-8'))
+                image_page_source = requests.get(
+                    self.site_root + uri, headers=self.headers).text
+                rating = self.get_page_rating(
+                    image_page_source)
 
                 # Determine if the current page is desired to be downloaded
                 if self.safe and rating == 'safe':
@@ -304,21 +300,28 @@ class konadl:
                 image_soup = BeautifulSoup(image_page_source, "html.parser")
                 for link in image_soup.findAll('a', {'id': 'highres'}):
                     if 'https:' not in link['href']:
-                        self.download_file('https:' + link['href'], page, uri.split("/")[-1])
+                        image_request, file_path = self.download_file(
+                            'https:' + link['href'], page, uri.split("/")[-1])
                     else:
-                        self.download_file(link['href'], page, uri.split("/")[-1])
+                        image_request, file_path = self.download_file(
+                            link['href'], page, uri.split("/")[-1])
+                if image_request.status_code != requests.codes.ok:
+                    if image_request.status_code == 429:
+                        self.print_429()
+                    download_queue.task_done()
+                    download_queue.put((uri, page))
+                    os.remove(file_path)
+                    image_request.raise_for_status()
                 download_queue.task_done()
-            except urllib.error.HTTPError as e:
+            except requests.exceptions.HTTPError:
                 self.write_traceback(page=page)
-                if e.code == 429:
-                    self.print_429()
-                download_queue.task_done()
-                download_queue.put((uri, page))
             except Exception:
                 self.write_traceback(uri=uri, page=page)
                 self.print_exception()
                 download_queue.task_done()
                 download_queue.put((uri, page))
+                if file_path:
+                    os.remove(file_path)
 
     def crawl_post_page_worker(self, post_queue, download_queue):
         """ Crawl the post list page and find posts
@@ -330,21 +333,25 @@ class konadl:
             try:
                 page = post_queue.get()
                 if page is None:
-                    self.print_thread_exit(str(threading.current_thread().name))
+                    self.print_thread_exit(
+                        str(threading.current_thread().name))
                     break
                 self.print_crawling_page(page)
-                page_source = self.get_page('{}/post?page={}&tags='.format(self.site_root, page))
-                soup = BeautifulSoup(page_source, "html.parser")
+                page_source = requests.get(
+                    '{}/post?page={}&tags='.format(self.site_root, page), headers=self.headers)
+                if page_source.status_code != requests.codes.ok:
+                    if page_source.status_code == 429:
+                        self.print_429()
+                    post_queue.task_done()
+                    post_queue.put(page)
+                    page_source.raise_for_status()
+                soup = BeautifulSoup(page_source.text, "html.parser")
                 for link in soup.findAll('a', href=True):
                     if re.match('/post/show/[0-9]*', link['href']):
                         download_queue.put((link['href'], page))
                 post_queue.task_done()
-            except urllib.error.HTTPError as e:
+            except requests.exceptions.HTTPError:
                 self.write_traceback(page=page)
-                if e.code == 429:
-                    self.print_429()
-                post_queue.task_done()
-                post_queue.put(page)
             except Exception:
                 self.write_traceback(page=page)
                 self.print_exception()
@@ -353,6 +360,9 @@ class konadl:
 
     def progress_files_present(self):
         # Determines if the progress files are present
+        self.progress_files = ['{}download_queue.progress'.format(self.storage),
+                               '{}post_queue.progress'.format(self.storage),
+                               '{}settings.progress'.format(self.storage)]
         for file in self.progress_files:
             if not os.path.isfile(file):
                 return False
@@ -413,7 +423,8 @@ class konadl:
         try:
             with open('{}download_queue.progress'.format(self.storage), 'r') as download_progress:
                 for line in download_progress:
-                    self.download_queue.put((line.split('|')[0], int(line.split('|')[1].strip('\n'))))
+                    self.download_queue.put(
+                        (line.split('|')[0], int(line.split('|')[1].strip('\n'))))
 
             with open('{}post_queue.progress'.format(self.storage), 'r') as post_progress:
                 for line in post_progress:
@@ -450,7 +461,8 @@ class konadl:
         hour = datetime.datetime.now().time().hour
         minute = datetime.datetime.now().time().minute
         second = datetime.datetime.now().time().second
-        print("[{}:{}:{}] [Page={}] Retrieving: {}".format(hour, minute, second, page, url))
+        print("[{}:{}:{}] [Page={}] Retrieving: {}".format(
+            hour, minute, second, page, url))
 
     @print_locker
     def print_crawling_page(self, page):
@@ -512,8 +524,6 @@ if __name__ == '__main__':
     kona.downloader_threads_amount = 20
     kona.pages = 3  # Crawl 3 pages
 
-    kona.error_logs_file = '/tmp/errors.log'
-
     kona.load_progress = False
     if kona.progress_files_present():
         kona.load_progress = True
@@ -521,4 +531,5 @@ if __name__ == '__main__':
     # Execute
     kona.crawl()
     print('\nMain thread exited without errors')
-    print('Time taken: {} seconds'.format(round((time.time() - kona.begin_time), 5)))
+    print('Time taken: {} seconds'.format(
+        round((time.time() - kona.begin_time), 5)))
