@@ -64,7 +64,7 @@ class konadl:
         URL and defines image storage folder.
         """
         self.begin_time = time.time()
-        self.VERSION = '1.6.1'
+        self.VERSION = '1.7 beta1'
         self.storage = '/tmp/konachan/'
         self.pages = False
         self.crawl_all = False
@@ -76,8 +76,10 @@ class konadl:
         self.downloader_threads_amount = 20
         self.logging = True
         self.load_progress = False
-        self.progress_file = 'konadl.progress'
         self.error_logs_file = False
+        self.progress_files = ['{}download_queue.progress'.format(self.storage),
+                               '{}post_queue.progress'.format(self.storage),
+                               '{}settings.progress'.format(self.storage)]
 
     def icon(self):
         print('     _   __                       ______  _')
@@ -136,14 +138,6 @@ class konadl:
         self.process_crawling_options()
 
         # load progress from progress file if needed
-        if self.load_progress:
-            pages, page, download = self.read_progress()
-            if pages.isdigit():
-                self.pages = int(pages)
-            else:
-                index_page = self.get_page('{}/post?page=1&tags='.format(self.site_root))
-                index_soup = BeautifulSoup(index_page, "html.parser")
-                self.pages = int(index_soup.findAll('a', href=True)[-10].text)
 
         # Initialize page queue and downloader queue
         self.post_queue = queue.Queue()
@@ -154,6 +148,9 @@ class konadl:
 
         self.print_lock = threading.Lock()
         self.error_log_lock = threading.Lock()
+
+        if self.load_progress:
+            self.read_progress()
 
         try:
             # Create post crawler threads
@@ -171,10 +168,7 @@ class konadl:
                 self.downloader_threads.append(thread)
 
             # Every page is a job in the queue
-            if self.load_progress:
-                for page_num in range(page, self.pages + 1):
-                    self.post_queue.put(page_num)
-            else:
+            if not self.load_progress:
                 for page_num in range(1, self.pages + 1):
                     self.post_queue.put(page_num)
 
@@ -357,6 +351,20 @@ class konadl:
                 post_queue.task_done()
                 post_queue.put(page)
 
+    def progress_files_present(self):
+        # Determines if the progress files are present
+        for file in self.progress_files:
+            if not os.path.isfile(file):
+                return False
+        return True
+
+    def remove_progress_files(self):
+        for file in self.progress_files:
+            try:
+                os.remove(file)
+            except FileNotFoundError:
+                pass
+
     def save_progress(self):
         """ Saves the download progress
 
@@ -371,26 +379,27 @@ class konadl:
         the progress file, which everything can be recovered
         accurately.
         """
+        with open('{}download_queue.progress'.format(self.storage), 'w') as download_progress:
+            while not self.download_queue.empty():
+                link, page = self.download_queue.get()
+                download_progress.write('{}|{}\n'.format(link, str(page)))
+                self.download_queue.task_done()
+            download_progress.close()
+
+        with open('{}post_queue.progress'.format(self.storage), 'w') as post_progress:
+            while not self.post_queue.empty():
+                post_progress.write('{}\n'.format(self.post_queue.get()))
+                self.post_queue.task_done()
+            post_progress.close()
+
         self.print_saving_progress()
         progress = configparser.ConfigParser()
-        progress['PAGES'] = {}
-        progress['CURRENTDOWNLOAD'] = {}
-        progress['CURRENTPAGE'] = {}
         progress['RATINGS'] = {}
+        progress['RATINGS']['safe'] = str(int(self.safe))
+        progress['RATINGS']['questionable'] = str(int(self.questionable))
+        progress['RATINGS']['explicit'] = str(int(self.explicit))
 
-        if self.crawl_all:
-            progress['PAGES']['pages'] = 'all'
-        else:
-            progress['PAGES']['pages'] = str(self.pages)
-        download, page = self.download_queue.get(False)
-        progress['CURRENTPAGE']['page'] = str(page)
-        progress['CURRENTDOWNLOAD']['download'] = download
-        self.download_queue.task_done()
-        progress['RATINGS']['safe'] = str(self.safe)
-        progress['RATINGS']['questionable'] = str(self.questionable)
-        progress['RATINGS']['explicit'] = str(self.explicit)
-
-        with open(self.progress_file, 'w') as progressf:
+        with open('{}settings.progress'.format(self.storage), 'w') as progressf:
             progress.write(progressf)
 
     def read_progress(self):
@@ -400,17 +409,23 @@ class konadl:
         the configuration file contents.
         """
         self.print_loading_progress()
+
         try:
+            with open('{}download_queue.progress'.format(self.storage), 'r') as download_progress:
+                for line in download_progress:
+                    self.download_queue.put((line.split('|')[0], int(line.split('|')[1].strip('\n'))))
+
+            with open('{}post_queue.progress'.format(self.storage), 'r') as post_progress:
+                for line in post_progress:
+                    self.post_queue.put(int(line.strip('\n')))
+                post_progress.close()
+
             progress = configparser.ConfigParser()
-            progress.read(self.progress_file)
-            pages = progress['PAGES']['pages']
-            page = int(progress['CURRENTPAGE']['page'])
-            download = progress['CURRENTDOWNLOAD']['download']
-            self.safe = bool(progress['RATINGS']['safe'])
-            self.questionable = bool(progress['RATINGS']['questionable'])
-            self.explicit = bool(progress['RATINGS']['explicit'])
-            return pages, page, download
-        except KeyError:
+            progress.read('{}settings.progress'.format(self.storage))
+            self.safe = bool(int(progress['RATINGS']['safe']))
+            self.questionable = bool(int(progress['RATINGS']['questionable']))
+            self.explicit = bool(int(progress['RATINGS']['explicit']))
+        except (KeyError, ValueError):
             self.print_faulty_progress_file()
             exit(1)
 
@@ -423,11 +438,11 @@ class konadl:
     @print_locker
     def print_saving_progress(self):
         # Tells the user that the progress is being saved
-        print('[Main Thread] Saving progress to {}'.format(self.progress_file))
+        print('[Main Thread] Saving progress to {}'.format(self.storage))
 
     def print_loading_progress(self):
         # Tells the user that the progress is being loaded
-        print('[Main Thread] Loading progress from {}'.format(self.progress_file))
+        print('[Main Thread] Loading progress from {}'.format(self.storage))
 
     @print_locker
     def print_retrieval(self, url, page):
@@ -497,17 +512,13 @@ if __name__ == '__main__':
     kona.downloader_threads_amount = 20
     kona.pages = 3  # Crawl 3 pages
 
-    if '/' not in kona.progress_file.replace('\\', '/'):
-        kona.progress_file = kona.storage + kona.progress_file
-
-    if os.path.isfile(kona.progress_file):
-        kona.load_progress = True
-
     kona.error_logs_file = '/tmp/errors.log'
+
+    kona.load_progress = False
+    if kona.progress_files_present():
+        kona.load_progress = True
 
     # Execute
     kona.crawl()
     print('\nMain thread exited without errors')
-    if os.path.isfile(kona.progress_file):
-        os.remove(kona.progress_file)
     print('Time taken: {} seconds'.format(round((time.time() - kona.begin_time), 5)))
