@@ -64,7 +64,7 @@ class konadl:
         URL and defines image storage folder.
         """
         self.begin_time = time.time()
-        self.VERSION = '1.7 beta2'
+        self.VERSION = '1.7 beta3'
         self.storage = '/tmp/konachan/'
         self.pages = False
         self.crawl_all = False
@@ -251,22 +251,6 @@ class konadl:
         else:
             return False
 
-    def download_file(self, url, page, file_name):
-        """ Download file
-
-        Downloads one file and saves it to the
-        specified folder with its original name.
-        """
-        self.print_retrieval(url, page)
-
-        suffix = url.split(".")[-1]
-        file_path = self.storage + file_name + '.' + suffix
-        with requests.get(url, headers=self.headers) as image_request:
-            with open(file_path, 'wb') as file:
-                file.write(image_request.content)
-                file.close()
-            return image_request, file_path
-
     def retrieve_post_image_worker(self, download_queue):
         """ Get the large image url and download
 
@@ -299,11 +283,17 @@ class konadl:
 
                 image_soup = BeautifulSoup(image_page_source, "html.parser")
                 for link in image_soup.findAll('a', {'id': 'highres'}):
-                    file_name = link['href'].split(
-                        "/")[-1].replace('%20', '_').replace('_-_', '_')
-                    image_request, file_path = self.download_file(
-                        link['href'], page, file_name)
-                if image_request.status_code != requests.codes.ok:
+                    file_name = link['href'].split("/")[-1].replace('%20', '_').replace('_-_', '_')
+                    self.print_retrieval(link['href'], page)
+                    suffix = link['href'].split(".")[-1]
+                    file_path = '{}{}.{}'.format(self.storage, file_name, suffix)
+                    image_request = requests.get(link['href'], headers=self.headers)
+                    with open(file_path, 'wb') as file:
+                        file_length = file.write(image_request.content)
+                        file.close()
+                if int(image_request.headers['content-length']) != file_length:
+                    raise Exception('Faulty download')
+                elif image_request.status_code != requests.codes.ok:
                     if image_request.status_code == 429:
                         self.print_429()
                     download_queue.task_done()
