@@ -2,7 +2,7 @@
 
 **Please read the [EULA](https://github.com/K4YT3X/KonaDL#eula) section carefully before starting to use this software.**
 
-libkonadl Version: **1.7 beta2**  
+libkonadl Version: **1.7 beta3**  
 KonaDL CLI Version: **1.3.2**
 
 </br>
@@ -20,12 +20,13 @@ Just preventing people from missing this.
 
 </br>
 
-### Beta Version (1.7 beta2) Changes
+### Beta Version (1.7 beta3) Changes
 
 1. Advanced progress recording now available
 1. Fixed some existing progress recorder issues
 1. Now using requests instead of urllib.request
 1. Added mechanisms to prevent file corruption
+1. Now checking content-length header to avoid faulty downloads
 
 ### Stable Version (1.6.1) Changes
 
