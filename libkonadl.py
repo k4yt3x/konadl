@@ -27,7 +27,6 @@ import configparser
 import datetime
 import os
 import queue
-import re
 import threading
 import time
 import traceback
@@ -64,8 +63,9 @@ class konadl:
         URL and defines image storage folder.
         """
         self.begin_time = time.time()
-        self.VERSION = '1.7 beta3'
+        self.VERSION = '1.7 beta4'
         self.storage = '/tmp/konachan/'
+        self.total_downloads = 0
         self.pages = False
         self.crawl_all = False
         self.yandere = False  # Use Yande.re website
@@ -91,7 +91,7 @@ class konadl:
         spaces = ((44 - len('Kernel Version ' + self.VERSION)) // 2) * ' '
         print(spaces + '   Kernel Version ' + self.VERSION + '\n')
 
-    def write_traceback(self, uri=False, page=False):
+    def write_traceback(self, url=False, page=False):
         """ Records traceback information
 
         This method prints the error message to screen and
@@ -108,8 +108,8 @@ class konadl:
                     str(datetime.datetime.now())))
                 if page:
                     error_file.write('PAGE={}\n'.format(page))
-                if uri:
-                    error_file.write('URI={}\n'.format(uri))
+                if url:
+                    error_file.write('URL={}\n'.format(url))
                 traceback.print_exc(file=error_file)
                 error_file.write('\n')
                 error_file.close()
@@ -236,21 +236,6 @@ class konadl:
         self.pages = int(index_soup.findAll('a', href=True)[-10].text)
         return self.crawl()
 
-    def get_page_rating(self, content):
-        """ Get page rating
-
-        Determines page rating by searching key
-        words in the page.
-        """
-        if 'Rating: Explicit' in content:
-            return 'explicit'
-        elif 'Rating: Questionable' in content:
-            return 'questionable'
-        elif 'Rating: Safe'in content:
-            return 'safe'
-        else:
-            return False
-
     def retrieve_post_image_worker(self, download_queue):
         """ Get the large image url and download
 
@@ -260,54 +245,36 @@ class konadl:
         while True:
             file_path = False
             try:
-                uri, page = download_queue.get()
-                if uri is None:
+                url, page = download_queue.get()
+                if url is None:
                     self.print_thread_exit(
                         str(threading.current_thread().name))
                     break
-                image_page_source = requests.get(
-                    self.site_root + uri, headers=self.headers).text
-                rating = self.get_page_rating(
-                    image_page_source)
-
-                # Determine if the current page is desired to be downloaded
-                if self.safe and rating == 'safe':
-                    pass
-                elif self.questionable and rating == 'questionable':
-                    pass
-                elif self.explicit and rating == 'explicit':
-                    pass
-                else:
-                    download_queue.task_done()
-                    continue
-
-                image_soup = BeautifulSoup(image_page_source, "html.parser")
-                for link in image_soup.findAll('a', {'id': 'highres'}):
-                    file_name = link['href'].split("/")[-1].replace('%20', '_').replace('_-_', '_')
-                    self.print_retrieval(link['href'], page)
-                    suffix = link['href'].split(".")[-1]
-                    file_path = '{}{}.{}'.format(self.storage, file_name, suffix)
-                    image_request = requests.get(link['href'], headers=self.headers)
-                    with open(file_path, 'wb') as file:
-                        file_length = file.write(image_request.content)
-                        file.close()
+                self.print_retrieval(url, page)
+                file_name = url.split("/")[-1].replace('%20', '_').replace('_-_', '_')
+                file_path = '{}{}.{}'.format(self.storage, file_name, url.split(".")[-1])
+                image_request = requests.get(url, headers=self.headers)
+                with open(file_path, 'wb') as file:
+                    file_length = file.write(image_request.content)
+                    file.close()
                 if int(image_request.headers['content-length']) != file_length:
                     raise Exception('Faulty download')
                 elif image_request.status_code != requests.codes.ok:
                     if image_request.status_code == 429:
                         self.print_429()
                     download_queue.task_done()
-                    download_queue.put((uri, page))
+                    download_queue.put((url, page))
                     os.remove(file_path)
                     image_request.raise_for_status()
+                self.total_downloads += 1
                 download_queue.task_done()
             except requests.exceptions.HTTPError:
                 self.write_traceback(page=page)
             except Exception:
-                self.write_traceback(uri=uri, page=page)
+                self.write_traceback(url=url, page=page)
                 self.print_exception()
                 download_queue.task_done()
-                download_queue.put((uri, page))
+                download_queue.put((url, page))
                 if file_path:
                     os.remove(file_path)
 
@@ -334,9 +301,22 @@ class konadl:
                     post_queue.put(page)
                     page_source.raise_for_status()
                 soup = BeautifulSoup(page_source.text, "html.parser")
-                for link in soup.findAll('a', href=True):
-                    if re.match('/post/show/[0-9]*', link['href']):
-                        download_queue.put((link['href'], page))
+                # Find large image link and ratings
+                posts_list = soup.find('ul', {'id': 'post-list-posts'})
+                posts = posts_list.findAll('li')
+
+                for post in posts:
+                    alt = post.find('img', alt=True)['alt']
+                    rating = False
+                    if 'Rating: Safe'in alt and self.safe:
+                        rating = 'safe'
+                    elif 'Rating: Questionable' in alt and self.questionable:
+                        rating = 'questionable'
+                    elif 'Rating: Explicit' in alt and self.explicit:
+                        rating = 'explicit'
+                    if rating:
+                        self.download_queue.put(
+                            (post.find('a', {'class': 'directlink'})['href'], page))
                 post_queue.task_done()
             except requests.exceptions.HTTPError:
                 self.write_traceback(page=page)
@@ -380,7 +360,8 @@ class konadl:
         with open('{}download_queue.progress'.format(self.storage), 'w') as download_progress:
             while not self.download_queue.empty():
                 link, page = self.download_queue.get()
-                download_progress.write('{}|{}\n'.format(link, str(page)))
+                download_progress.write(
+                    '{}|{}\n'.format(link, str(page)))
                 self.download_queue.task_done()
             download_progress.close()
 
@@ -519,5 +500,6 @@ if __name__ == '__main__':
     # Execute
     kona.crawl()
     print('\nMain thread exited without errors')
+    print('{} image(s) downloaded'.format(kona.total_downloads))
     print('Time taken: {} seconds'.format(
         round((time.time() - kona.begin_time), 5)))
