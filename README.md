@@ -2,7 +2,7 @@
 
 **Please read the [EULA](https://github.com/K4YT3X/KonaDL#eula) section carefully before starting to use this software.**
 
-libkonadl Version: **1.7 beta4**  
+libkonadl Version: **1.7 beta5**  
 KonaDL CLI Version: **1.3.3**
 
 </br>
@@ -20,7 +20,7 @@ Just preventing people from missing this.
 
 </br>
 
-### Beta Version (1.7 beta3) Changes
+### Beta Version (1.7 beta5) Changes
 
 1. Advanced progress recording now available
 1. Fixed some existing progress recorder issues
@@ -29,6 +29,7 @@ Just preventing people from missing this.
 1. Now checking content-length header to avoid faulty downloads
 1. Now using a different method to get image link and rating
 1. Added showing total images downloaded after all downloads are finished
+1. Fixed questionable rated image downloading errors
 
 ### Stable Version (1.6.1) Changes
 
