@@ -2,8 +2,8 @@
 
 **Please read the [EULA](https://github.com/K4YT3X/KonaDL#eula) section carefully before starting to use this software.**
 
-libkonadl Version: **1.7 beta3**  
-KonaDL CLI Version: **1.3.2**
+libkonadl Version: **1.7 beta4**  
+KonaDL CLI Version: **1.3.3**
 
 </br>
 
@@ -27,6 +27,8 @@ Just preventing people from missing this.
 1. Now using requests instead of urllib.request
 1. Added mechanisms to prevent file corruption
 1. Now checking content-length header to avoid faulty downloads
+1. Now using a different method to get image link and rating
+1. Added showing total images downloaded after all downloads are finished
 
 ### Stable Version (1.6.1) Changes
 
