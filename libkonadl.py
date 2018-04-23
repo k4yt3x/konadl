@@ -63,7 +63,7 @@ class konadl:
         URL and defines image storage folder.
         """
         self.begin_time = time.time()
-        self.VERSION = '1.7 beta4'
+        self.VERSION = '1.7 beta5'
         self.storage = '/tmp/konachan/'
         self.total_downloads = 0
         self.pages = False
@@ -121,10 +121,7 @@ class konadl:
         Processes crawling information. Core function is to
         determine the value for self.site_root.
         """
-        if self.explicit:
-            self.site_root = 'https://konachan.com'
-        else:
-            self.site_root = 'https://konachan.net'
+        self.site_root = 'https://konachan.com'
         if self.yandere:
             self.site_root = 'https://yande.re'
 
