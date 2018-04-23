@@ -3,7 +3,7 @@
 """
 Name: Konachan Downloader CLI for Linux
 Date Created: 13 Apr. 2018
-Last Modified: 21 Apr. 2018
+Last Modified: 22 Apr. 2018
 
 Licensed under the GNU General Public License Version 3 (GNU GPL v3),
     available at: https://www.gnu.org/licenses/gpl-3.0.txt
@@ -18,7 +18,7 @@ import os
 import time
 import traceback
 
-VERSION = '1.3.2'
+VERSION = '1.3.3'
 
 
 def process_arguments():
@@ -236,8 +236,10 @@ try:
         elif args.page:
             job_done = kona.crawl_page(args.page)
 
-        avalon.info('Main thread exited without errors\n')
-        avalon.info('Time taken: {} seconds'.format(round((time.time() - kona.begin_time), 5)))
+        avalon.info('Main thread exited without errors')
+        avalon.info('{}{}{}{}{} image(s) downloaded'.format(avalon.FG.W, avalon.FM.BD, kona.total_downloads, avalon.FM.RST, avalon.FG.G))
+        avalon.info('Time taken: {}{}{}{}{} seconds'.format(avalon.FG.W, avalon.FM.BD, round(
+            (time.time() - kona.begin_time), 5), avalon.FM.RST, avalon.FG.G))
         if kona.progress_files_present() and job_done:
             avalon.info('All downloads complete')
             avalon.info('Removing progress file\n')
