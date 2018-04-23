@@ -237,13 +237,15 @@ try:
             job_done = kona.crawl_page(args.page)
 
         avalon.info('Main thread exited without errors')
-        avalon.info('{}{}{}{}{} image(s) downloaded'.format(avalon.FG.W, avalon.FM.BD, kona.total_downloads, avalon.FM.RST, avalon.FG.G))
+        if job_done:
+            avalon.info('{}{}{}{}{} image(s) downloaded'.format(avalon.FG.W, avalon.FM.BD, kona.total_downloads, avalon.FM.RST, avalon.FG.G))
         avalon.info('Time taken: {}{}{}{}{} seconds'.format(avalon.FG.W, avalon.FM.BD, round(
             (time.time() - kona.begin_time), 5), avalon.FM.RST, avalon.FG.G))
-        if kona.progress_files_present() and job_done:
+        if job_done:
             avalon.info('All downloads complete')
-            avalon.info('Removing progress file\n')
-            kona.remove_progress_files()
+            if kona.progress_files_present():
+                avalon.info('Removing progress file')
+                kona.remove_progress_files()
     else:
         avalon.error('This file cannot be imported as a module!')
         raise SystemError('Cannot be imported')
