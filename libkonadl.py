@@ -243,7 +243,6 @@ class konadl:
         and calls the downloader to download all of them.
         """
         while True:
-            file_path = False
             try:
                 url, page = download_queue.get()
                 if url is None:
@@ -264,7 +263,8 @@ class konadl:
                         self.print_429()
                     download_queue.task_done()
                     download_queue.put((url, page))
-                    os.remove(file_path)
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
                     image_request.raise_for_status()
                 self.total_downloads += 1
                 download_queue.task_done()
@@ -275,7 +275,7 @@ class konadl:
                 self.print_exception()
                 download_queue.task_done()
                 download_queue.put((url, page))
-                if file_path:
+                if os.path.isfile(file_path):
                     os.remove(file_path)
 
     def crawl_post_page_worker(self, post_queue, download_queue):
@@ -315,8 +315,10 @@ class konadl:
                     elif 'Rating: Explicit' in alt and self.explicit:
                         rating = 'explicit'
                     if rating:
-                        self.download_queue.put(
-                            (post.find('a', {'class': 'directlink'})['href'], page))
+                        url = post.find('a', {'class': 'directlink'})['href']
+                        if 'https:' not in url:
+                            url = '{}{}'.format('https:', url)
+                        self.download_queue.put((url, page))
                 post_queue.task_done()
             except requests.exceptions.HTTPError:
                 self.write_traceback(page=page)
