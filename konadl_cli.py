@@ -111,7 +111,7 @@ def display_options(kona, load_progress):
             else:
                 avalon.info('Crawling {}{}{}{}{} Pages\n'.format(avalon.FG.W, avalon.FM.BD, args.pages, avalon.FM.RST, avalon.FG.G))
         elif args.all:
-            avalon.warning('Crawling {}{}ALL{}{} Pages\n'.format(avalon.FG.W, avalon.FM.BD, avalon.FM.RST, avalon.FG.G))
+            avalon.warning('Crawling {}ALL{} Pages\n'.format(avalon.FG.W, avalon.FG.Y))
         elif args.page:
             avalon.info('Crawling Page #{}'.format(args.page))
 
