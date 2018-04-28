@@ -2,7 +2,7 @@
 
 **Please read the [EULA](https://github.com/K4YT3X/KonaDL#eula) section carefully before starting to use this software.**
 
-libkonadl Version: **1.7 beta56**  
+libkonadl Version: **1.7 beta6**  
 KonaDL CLI Version: **1.3.4**
 
 </br>
