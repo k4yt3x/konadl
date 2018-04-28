@@ -20,8 +20,10 @@ Just preventing people from missing this.
 
 </br>
 
-### Beta Version (1.7 beta5) Changes
+### Beta Version (1.7 beta6) Changes
 
+1. Total downloads will be printed when tasks are interrupted
+1. Total downloads and time elapsed will be saved on interruption and will be loaded when an interrupted task is continued.
 1. Advanced progress recording now available
 1. Fixed some existing progress recorder issues
 1. Now using requests instead of urllib.request
