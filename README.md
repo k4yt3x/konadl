@@ -38,7 +38,7 @@ Just preventing people from missing this.
 1. **Images downloaded are now uncompressed original images**
 
 
-![konadl_cli](https://user-images.githubusercontent.com/21986859/38762615-bb0269a4-3f5b-11e8-895d-0eb197a3de8f.png)
+![konadl1 7](https://user-images.githubusercontent.com/21986859/39401587-a75ab99e-4b16-11e8-8282-7b7c10853751.png)
 
 ### Recent Changes
 1. The program can now recover itself from all kinds of errors and continue downloading  
