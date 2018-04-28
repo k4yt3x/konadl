@@ -18,7 +18,7 @@ import os
 import time
 import traceback
 
-VERSION = '1.3.3'
+VERSION = '1.3.4'
 
 
 def process_arguments():
@@ -237,10 +237,9 @@ try:
             job_done = kona.crawl_page(args.page)
 
         avalon.info('Main thread exited without errors')
-        if job_done and not load_progress:
-            avalon.info('{}{}{}{}{} image(s) downloaded'.format(avalon.FG.W, avalon.FM.BD, kona.total_downloads, avalon.FM.RST, avalon.FG.G))
+        avalon.info('{}{}{}{}{} image(s) downloaded'.format(avalon.FG.W, avalon.FM.BD, kona.total_downloads, avalon.FM.RST, avalon.FG.G))
         avalon.info('Time taken: {}{}{}{}{} seconds'.format(avalon.FG.W, avalon.FM.BD, round(
-            (time.time() - kona.begin_time), 5), avalon.FM.RST, avalon.FG.G))
+            (time.time() - kona.begin_time + kona.time_elapsed), 5), avalon.FM.RST, avalon.FG.G))
         if job_done:
             avalon.info('All downloads complete')
             if kona.progress_files_present():
