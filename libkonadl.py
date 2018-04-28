@@ -12,7 +12,7 @@
 Name: Konachan Downloader Library
 Dev: K4YT3X
 Date Created: 11 Apr. 2018
-Last Modified: 22 Apr. 2018
+Last Modified: 28 Apr. 2018
 
 Licensed under the GNU General Public License Version 3 (GNU GPL v3),
     available at: https://www.gnu.org/licenses/gpl-3.0.txt
@@ -63,7 +63,8 @@ class konadl:
         URL and defines image storage folder.
         """
         self.begin_time = time.time()
-        self.VERSION = '1.7 beta5'
+        self.time_elapsed = 0
+        self.VERSION = '1.7 beta6'
         self.storage = '/tmp/konachan/'
         self.total_downloads = 0
         self.pages = False
@@ -180,15 +181,10 @@ class konadl:
             for _ in range(self.downloader_threads_amount):
                 self.download_queue.put((None, None))
 
-            while True:
-                for thread in self.page_threads:
-                    if thread.is_alive():
-                        continue
-                for thread in self.downloader_threads:
-                    if thread.is_alive():
-                        continue
-                time.sleep(1)
-                break
+            for thread in self.page_threads:
+                thread.join()
+            for thread in self.downloader_threads:
+                thread.join()
 
             return True  # Job entirely done
         except (KeyboardInterrupt, SystemExit):
@@ -196,13 +192,21 @@ class konadl:
             # Clear queues and put None as exit signal
             self.warn_keyboard_interrupt()
             if not self.download_queue.empty():
-                self.save_progress()
+                self.save_queues()
+
             self.post_queue.queue.clear()
             for _ in range(self.post_crawler_threads_amount):
                 self.post_queue.put(None)
             self.download_queue.queue.clear()
             for _ in range(self.downloader_threads_amount):
                 self.download_queue.put((None, None))
+
+            for thread in self.page_threads:
+                thread.join()
+            for thread in self.downloader_threads:
+                thread.join()
+
+            self.save_metadata()
             return False  # Job paused
 
     def crawl_page(self, page_num):
@@ -329,7 +333,7 @@ class konadl:
         # Determines if the progress files are present
         self.progress_files = ['{}download_queue.progress'.format(self.storage),
                                '{}post_queue.progress'.format(self.storage),
-                               '{}settings.progress'.format(self.storage)]
+                               '{}metadata.progress'.format(self.storage)]
         for file in self.progress_files:
             if not os.path.isfile(file):
                 return False
@@ -342,19 +346,12 @@ class konadl:
             except FileNotFoundError:
                 pass
 
-    def save_progress(self):
-        """ Saves the download progress
+    def save_queues(self):
+        """ Saves the queues to files
 
-        TODO: find a more accurate method of recording
-        the download progress. The current method is not
-        accurate if an error has occurred during the
-        download or if the page order in download queue
-        is complete.
-
-        The better way might be writing everything in
-        memory (download_queue, post_queue, etc.) to
-        the progress file, which everything can be recovered
-        accurately.
+        This method should be called before the queue is cleared.
+        It will write all the items in download_queue and page_queue
+        into the progress files.
         """
         with open('{}download_queue.progress'.format(self.storage), 'w') as download_progress:
             while not self.download_queue.empty():
@@ -370,14 +367,23 @@ class konadl:
                 self.post_queue.task_done()
             post_progress.close()
 
+    def save_metadata(self):
+        """ Saves the settings and stats into file
+
+        Saves the desired rating, total downloads
+        and time information into file.
+        """
         self.print_saving_progress()
         progress = configparser.ConfigParser()
         progress['RATINGS'] = {}
         progress['RATINGS']['safe'] = str(int(self.safe))
         progress['RATINGS']['questionable'] = str(int(self.questionable))
         progress['RATINGS']['explicit'] = str(int(self.explicit))
+        progress['STATISTICS'] = {}
+        progress['STATISTICS']['total_downloads'] = str(self.total_downloads)
+        progress['STATISTICS']['time_elapsed'] = str(round((time.time() - self.begin_time), 5))
 
-        with open('{}settings.progress'.format(self.storage), 'w') as progressf:
+        with open('{}metadata.progress'.format(self.storage), 'w') as progressf:
             progress.write(progressf)
 
     def read_progress(self):
@@ -400,10 +406,12 @@ class konadl:
                 post_progress.close()
 
             progress = configparser.ConfigParser()
-            progress.read('{}settings.progress'.format(self.storage))
+            progress.read('{}metadata.progress'.format(self.storage))
             self.safe = bool(int(progress['RATINGS']['safe']))
             self.questionable = bool(int(progress['RATINGS']['questionable']))
             self.explicit = bool(int(progress['RATINGS']['explicit']))
+            self.total_downloads += int(progress['STATISTICS']['total_downloads'])
+            self.time_elapsed = float(progress['STATISTICS']['time_elapsed'])
         except (KeyError, ValueError):
             self.print_faulty_progress_file()
             exit(1)
