@@ -100,10 +100,15 @@ You can also set crawler and downloader threads.
 $ python3 konadl_cli.py -o /tmp/konachan -e -s -q -n 10 -c 10 -d 20
 ```
 
+To update new images since the last download use `--update`
+```
+$ python3 konadl_cli.py -o /tmp/konachan/ --update
+```
+
 Full usage:
 ```
-usage: konadl_cli.py [-h] [-n PAGES] [-a] [-p PAGE] [-y] [-o STORAGE] [-s]
-                     [-q] [-e] [-c CRAWLERS] [-d DOWNLOADERS] [-v]
+usage: konadl_cli.py [-h] [-n PAGES] [-a] [-p PAGE] [-y] [-o STORAGE] [-u]
+                     [-s] [-q] [-e] [-c CRAWLERS] [-d DOWNLOADERS] [-v]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -116,6 +121,9 @@ Controls:
   -y, --yandere         Crawl Yande.re site
   -o STORAGE, --storage STORAGE
                         Storage directory
+  -u, --update          Update new images
+
+Ratings:
   -s, --safe            Include Safe rated images
   -q, --questionable    Include Questionable rated images
   -e, --explicit        Include Explicit rated images
