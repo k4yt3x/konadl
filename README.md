@@ -2,8 +2,8 @@
 
 **Please read the [EULA](https://github.com/K4YT3X/KonaDL#eula) section carefully before starting to use this software.**
 
-libkonadl Version: **1.7 beta6**  
-KonaDL CLI Version: **1.3.4**
+libkonadl Version: **1.8 alpha1**  
+KonaDL CLI Version: **1.3.5**
 
 </br>
 
@@ -20,7 +20,12 @@ Just preventing people from missing this.
 
 </br>
 
-### Beta Version (1.7 beta6) Changes
+### Beta Version (1.8 alpha1) Changes
+
+1. You can now update newly added images to a download
+
+
+### Stable Version (1.7.1) Changes
 
 1. Total downloads will be printed when tasks are interrupted
 1. Total downloads and time elapsed will be saved on interruption and will be loaded when an interrupted task is continued.
@@ -33,14 +38,11 @@ Just preventing people from missing this.
 1. Added showing total images downloaded after all downloads are finished
 1. Fixed questionable rated image downloading errors
 
-### Stable Version (1.6.1) Changes
-
-1. **Images downloaded are now uncompressed original images**
-
 
 ![konadl1 7](https://user-images.githubusercontent.com/21986859/39401587-a75ab99e-4b16-11e8-8282-7b7c10853751.png)
 
 ### Recent Changes
+1. **Images downloaded are now uncompressed original images**
 1. The program can now recover itself from all kinds of errors and continue downloading  
 Examples:
    + Temporary network issues
