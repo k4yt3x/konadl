@@ -18,7 +18,7 @@ import os
 import time
 import traceback
 
-VERSION = '1.3.4'
+VERSION = '1.3.5'
 
 
 def process_arguments():
@@ -34,10 +34,11 @@ def process_arguments():
     control_group.add_argument('-p', '--page', help='Crawl a specific page', type=int, action='store', default=False)
     control_group.add_argument('-y', '--yandere', help='Crawl Yande.re site', action='store_true', default=False)
     control_group.add_argument('-o', '--storage', help='Storage directory', action='store', default=False)
-    threading_group = parser.add_argument_group('Ratings')
-    control_group.add_argument('-s', '--safe', help='Include Safe rated images', action='store_true', default=False)
-    control_group.add_argument('-q', '--questionable', help='Include Questionable rated images', action='store_true', default=False)
-    control_group.add_argument('-e', '--explicit', help='Include Explicit rated images', action='store_true', default=False)
+    control_group.add_argument('-u', '--update', help='Update new images', action='store_true', default=False)
+    ratings_group = parser.add_argument_group('Ratings')
+    ratings_group.add_argument('-s', '--safe', help='Include Safe rated images', action='store_true', default=False)
+    ratings_group.add_argument('-q', '--questionable', help='Include Questionable rated images', action='store_true', default=False)
+    ratings_group.add_argument('-e', '--explicit', help='Include Explicit rated images', action='store_true', default=False)
     threading_group = parser.add_argument_group('Threading')
     threading_group.add_argument('-c', '--crawlers', help='Number of post crawler threads', type=int, action='store', default=10)
     threading_group.add_argument('-d', '--downloaders', help='Number of downloader threads', type=int, action='store', default=20)
@@ -81,7 +82,7 @@ def check_storage_dir(args):
     return storage
 
 
-def display_options(kona, load_progress):
+def display_options(kona, load_progress, args):
     """ Display konadl crawling options
 
     Prints the options of konadl before start crawling.
@@ -93,8 +94,8 @@ def display_options(kona, load_progress):
     """
     avalon.dbgInfo('Program Started')
     avalon.info('Using storage directory: {}{}'.format(avalon.FG.W, kona.storage))
-    if load_progress:
-        avalon.info('Sourcing configuration defined in the progress file')
+    if load_progress or args.update:
+        avalon.info('Sourcing configuration defined in the metadata file')
     else:
         if kona.safe:
             avalon.info('Including {}{}SAFE{}{} rated images'.format(avalon.FG.W, avalon.FM.BD, avalon.FM.RST, avalon.FG.G))
@@ -197,7 +198,8 @@ try:
                 kona.load_progress = True
                 load_progress = True
             else:
-                avalon.info('Creating new download profile')
+                avalon.info('Starting new download progress')
+                kona.remove_progress_files()
 
         # Pass terminal arguments to libkonadl object
         kona.yandere = args.yandere
@@ -206,9 +208,9 @@ try:
         kona.explicit = args.explicit
         kona.post_crawler_threads_amount = args.crawlers
         kona.downloader_threads_amount = args.downloaders
-        display_options(kona, load_progress)
+        display_options(kona, load_progress, args)
 
-        if not kona.safe and not kona.questionable and not kona.explicit and not load_progress:
+        if not kona.safe and not kona.questionable and not kona.explicit and not load_progress and not args.update:
             avalon.error('Please supply information about what you want to download')
             print(avalon.FM.BD + 'You must include one of the following arguments:')
             print('  -s, --safe            Include Safe rated images')
@@ -216,7 +218,7 @@ try:
             print('  -e, --explicit        Include Explicit rated images')
             print('Use --help for more information\n' + avalon.FM.RST)
             exit(1)
-        elif not args.pages and not args.all and not args.page and not load_progress:
+        elif not args.pages and not args.all and not args.page and not load_progress and not args.update:
             avalon.error('Please supply information about what you want to download')
             print(avalon.FM.BD + 'You must include one of the following arguments:')
             print('  -n PAGES, --pages PAGES')
@@ -225,22 +227,25 @@ try:
             print('  -p PAGE, --page PAGE  Crawl a specific page')
             print('Use --help for more information\n' + avalon.FM.RST)
 
-        job_done = False
         if load_progress:
-            job_done = kona.crawl()
+            kona.crawl()
+        elif args.update:
+            avalon.info('Updating new images')
+            if kona.update() is False:
+                avalon.info('{}{}No new images found\n'.format(avalon.FM.BD, avalon.FG.W))
         elif args.pages:
             kona.pages = args.pages
-            job_done = kona.crawl()
+            kona.crawl()
         elif args.all:
-            job_done = kona.crawl_all_pages()
+            kona.crawl_all_pages()
         elif args.page:
-            job_done = kona.crawl_page(args.page)
+            kona.crawl_page(args.page)
 
         avalon.info('Main thread exited without errors')
         avalon.info('{}{}{}{}{} image(s) downloaded'.format(avalon.FG.W, avalon.FM.BD, kona.total_downloads, avalon.FM.RST, avalon.FG.G))
         avalon.info('Time taken: {}{}{}{}{} seconds'.format(avalon.FG.W, avalon.FM.BD, round(
             (time.time() - kona.begin_time + kona.time_elapsed), 5), avalon.FM.RST, avalon.FG.G))
-        if job_done:
+        if kona.job_done:
             avalon.info('All downloads complete')
             if kona.progress_files_present():
                 avalon.info('Removing progress file')
