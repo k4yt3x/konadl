@@ -25,12 +25,13 @@ konachan.com / konachan.net images.
 from bs4 import BeautifulSoup
 import configparser
 import datetime
+import itertools
 import os
 import queue
+import requests
 import threading
 import time
 import traceback
-import requests
 
 
 def print_locker(function):
@@ -64,7 +65,7 @@ class konadl:
         """
         self.begin_time = time.time()
         self.time_elapsed = 0
-        self.VERSION = '1.7 beta6'
+        self.VERSION = '1.8 alpha1'
         self.storage = '/tmp/konachan/'
         self.total_downloads = 0
         self.pages = False
@@ -73,8 +74,11 @@ class konadl:
         self.safe = True
         self.explicit = False
         self.questionable = False
+        self.current_newest_id = False
+        self.previous_newest_id = False
         self.post_crawler_threads_amount = 10
         self.downloader_threads_amount = 20
+        self.job_done = False
         self.load_progress = False
         self.error_logs_file = False
         self.headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
@@ -148,9 +152,11 @@ class konadl:
 
         # load progress from progress file if needed
         if self.load_progress:
-            self.read_progress()
+            self.read_queues()
 
         try:
+            self.current_newest_id = self.get_newest_image_id()
+
             # Create post crawler threads
             for identifier in range(self.post_crawler_threads_amount):
                 thread = threading.Thread(target=self.crawl_post_page_worker, args=(
@@ -186,6 +192,8 @@ class konadl:
             for thread in self.downloader_threads:
                 thread.join()
 
+            self.job_done = True
+            self.save_metadata()
             return True  # Job entirely done
         except (KeyboardInterrupt, SystemExit):
             # Main thread catches KeyboardInterrupt
@@ -229,13 +237,130 @@ class konadl:
         """
         self.crawl_all = True
         self.process_crawling_options()
+        self.pages = self.get_total_pages()
+        return self.crawl()
+
+    def update(self):
+        self.process_crawling_options()
+        self.read_metadata()
+        self.current_newest_id = self.get_newest_image_id()
+        self.error_logs_file = '{}errors.log'.format(self.storage)
+
+        # Initialize page queue and downloader queue
+        self.post_queue = queue.Queue()
+        self.download_queue = queue.Queue()
+        # Prepare containers for threads
+        self.downloader_threads = []
+
+        self.print_lock = threading.Lock()
+        self.error_log_lock = threading.Lock()
+
+        if self.get_newest_image_id() == self.previous_newest_id:
+            return False
+
+        try:
+
+            # Create image downloader threads
+            for identifier in range(self.downloader_threads_amount):
+                thread = threading.Thread(
+                    target=self.retrieve_post_image_worker, args=(self.download_queue,))
+                thread.name = 'Downloader {}'.format(identifier)
+                thread.start()
+                self.downloader_threads.append(thread)
+
+            self.crawl_new_images()
+
+            self.download_queue.join()
+            for _ in range(self.downloader_threads_amount):
+                self.download_queue.put((None, None))
+            for thread in self.downloader_threads:
+                thread.join()
+            self.job_done = True
+            self.save_metadata()
+            return True
+        except (KeyboardInterrupt, SystemExit):
+            self.warn_keyboard_interrupt()
+            if not self.download_queue.empty():
+                self.save_queues()
+
+            self.download_queue.queue.clear()
+            for _ in range(self.downloader_threads_amount):
+                self.download_queue.put((None, None))
+            for thread in self.downloader_threads:
+                thread.join()
+
+            self.save_metadata()
+            return False  # Job paused
+
+    def get_total_pages(self):
         # Crawl the first post page and read the number of total pages
-        index_page = requests.get(
-            '{}/post?page=1&tags='.format(self.site_root), headers=self.headers).text
+        index_page = requests.get('{}/post?page=1&tags='.format(self.site_root), headers=self.headers).text
         index_soup = BeautifulSoup(index_page, "html.parser")
         # Find the page number of the last page
-        self.pages = int(index_soup.findAll('a', href=True)[-10].text)
-        return self.crawl()
+        return int(index_soup.findAll('a', href=True)[-10].text)
+
+    def get_newest_image_id(self):
+        """Gets the id of the newest image
+
+        Gets the ID of the newest image, where the rating
+        of the image has to be included in the desired
+        ratings.
+        """
+        index_page = requests.get('{}/post?page=1&tags='.format(self.site_root), headers=self.headers).text
+        index_soup = BeautifulSoup(index_page, "html.parser")
+        posts_list = index_soup.find('ul', {'id': 'post-list-posts'})
+        posts = posts_list.findAll('li')
+        for post in posts:
+            alt = post.find('img', alt=True)['alt']
+            rating = False
+            if 'Rating: Safe'in alt and self.safe:
+                rating = 'safe'
+            elif 'Rating: Questionable' in alt and self.questionable:
+                rating = 'questionable'
+            elif 'Rating: Explicit' in alt and self.explicit:
+                rating = 'explicit'
+            if rating:
+                return(post['id'])
+
+    def crawl_new_images(self):
+        """ Load all new images
+
+        Crawl the site and append all the new images
+        since the last download into download_queue
+        """
+        update_post_queue = queue.Queue()
+        for page_num in range(1, self.get_total_pages() + 1):
+            update_post_queue.put(page_num)
+
+        while not update_post_queue.empty():
+            page = update_post_queue.get()
+            self.print_crawling_page(page)
+            page_source = requests.get('{}/post?page={}&tags='.format(self.site_root, page), headers=self.headers)
+            if page_source.status_code != requests.codes.ok:
+                if page_source.status_code == 429:
+                    self.print_429()
+                page_source.raise_for_status()
+            soup = BeautifulSoup(page_source.text, "html.parser")
+            # Find large image link and ratings
+            posts_list = soup.find('ul', {'id': 'post-list-posts'})
+            posts = posts_list.findAll('li')
+
+            for post in posts:
+                if post['id'] == self.previous_newest_id:
+                    return
+                alt = post.find('img', alt=True)['alt']
+                rating = False
+                if 'Rating: Safe'in alt and self.safe:
+                    rating = 'safe'
+                elif 'Rating: Questionable' in alt and self.questionable:
+                    rating = 'questionable'
+                elif 'Rating: Explicit' in alt and self.explicit:
+                    rating = 'explicit'
+                if rating:
+                    url = post.find('a', {'class': 'directlink'})['href']
+                    if 'https:' not in url:
+                        url = '{}{}'.format('https:', url)
+                    self.download_queue.put((url, page))
 
     def retrieve_post_image_worker(self, download_queue):
         """ Get the large image url and download
@@ -332,19 +457,32 @@ class konadl:
     def progress_files_present(self):
         # Determines if the progress files are present
         self.progress_files = ['{}download_queue.progress'.format(self.storage),
-                               '{}post_queue.progress'.format(self.storage),
-                               '{}metadata.progress'.format(self.storage)]
+                               '{}post_queue.progress'.format(self.storage)]
         for file in self.progress_files:
             if not os.path.isfile(file):
                 return False
         return True
 
     def remove_progress_files(self):
+        # Remove progress files
+        # Called when download is fully finished
         for file in self.progress_files:
             try:
                 os.remove(file)
             except FileNotFoundError:
                 pass
+
+    def metadata_present(self):
+        return os.path.isfile('{}metadata.progress'.format(self.storage))
+
+    def remove_metatada(self):
+        # Remove metadata
+        # Called when an old download progress is to be
+        # removed
+        try:
+            os.remove('{}metadata.progress'.format(self.storage))
+        except FileNotFoundError:
+            pass
 
     def save_queues(self):
         """ Saves the queues to files
@@ -356,8 +494,7 @@ class konadl:
         with open('{}download_queue.progress'.format(self.storage), 'w') as download_progress:
             while not self.download_queue.empty():
                 link, page = self.download_queue.get()
-                download_progress.write(
-                    '{}|{}\n'.format(link, str(page)))
+                download_progress.write('{}|{}\n'.format(link, str(page)))
                 self.download_queue.task_done()
             download_progress.close()
 
@@ -382,11 +519,16 @@ class konadl:
         progress['STATISTICS'] = {}
         progress['STATISTICS']['total_downloads'] = str(self.total_downloads)
         progress['STATISTICS']['time_elapsed'] = str(round((time.time() - self.begin_time), 5))
+        if self.job_done:
+            progress['STATISTICS']['total_downloads'] = '0'
+            progress['STATISTICS']['time_elapsed'] = '0'
+        progress['UPDATING'] = {}
+        progress['UPDATING']['previous_newest_id'] = self.current_newest_id
 
         with open('{}metadata.progress'.format(self.storage), 'w') as progressf:
             progress.write(progressf)
 
-    def read_progress(self):
+    def read_queues(self):
         """ Reads the download progress
 
         Parses the download progress and returns
@@ -397,24 +539,28 @@ class konadl:
         try:
             with open('{}download_queue.progress'.format(self.storage), 'r') as download_progress:
                 for line in download_progress:
-                    self.download_queue.put(
-                        (line.split('|')[0], int(line.split('|')[1].strip('\n'))))
+                    self.download_queue.put((line.split('|')[0], int(line.split('|')[1].strip('\n'))))
+                download_progress.close()
 
             with open('{}post_queue.progress'.format(self.storage), 'r') as post_progress:
                 for line in post_progress:
                     self.post_queue.put(int(line.strip('\n')))
                 post_progress.close()
 
-            progress = configparser.ConfigParser()
-            progress.read('{}metadata.progress'.format(self.storage))
-            self.safe = bool(int(progress['RATINGS']['safe']))
-            self.questionable = bool(int(progress['RATINGS']['questionable']))
-            self.explicit = bool(int(progress['RATINGS']['explicit']))
-            self.total_downloads += int(progress['STATISTICS']['total_downloads'])
-            self.time_elapsed = float(progress['STATISTICS']['time_elapsed'])
+            self.read_metadata()
         except (KeyError, ValueError):
             self.print_faulty_progress_file()
             exit(1)
+
+    def read_metadata(self):
+        progress = configparser.ConfigParser()
+        progress.read('{}metadata.progress'.format(self.storage))
+        self.safe = bool(int(progress['RATINGS']['safe']))
+        self.questionable = bool(int(progress['RATINGS']['questionable']))
+        self.explicit = bool(int(progress['RATINGS']['explicit']))
+        self.total_downloads += int(progress['STATISTICS']['total_downloads'])
+        self.time_elapsed = float(progress['STATISTICS']['time_elapsed'])
+        self.previous_newest_id = progress['UPDATING']['previous_newest_id']
 
     @print_locker
     def warn_keyboard_interrupt(self):
