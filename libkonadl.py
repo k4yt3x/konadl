@@ -25,7 +25,6 @@ konachan.com / konachan.net images.
 from bs4 import BeautifulSoup
 import configparser
 import datetime
-import itertools
 import os
 import queue
 import requests
@@ -65,8 +64,9 @@ class konadl:
         """
         self.begin_time = time.time()
         self.time_elapsed = 0
-        self.VERSION = '1.8 alpha1'
+        self.VERSION = '1.8 alpha2'
         self.storage = '/tmp/konachan/'
+        self.separate = False
         self.total_downloads = 0
         self.pages = False
         self.crawl_all = False
@@ -185,7 +185,7 @@ class konadl:
             for _ in range(self.post_crawler_threads_amount):
                 self.post_queue.put(None)
             for _ in range(self.downloader_threads_amount):
-                self.download_queue.put((None, None))
+                self.download_queue.put((None, None, None))
 
             for thread in self.page_threads:
                 thread.join()
@@ -207,7 +207,7 @@ class konadl:
                 self.post_queue.put(None)
             self.download_queue.queue.clear()
             for _ in range(self.downloader_threads_amount):
-                self.download_queue.put((None, None))
+                self.download_queue.put((None, None, None))
 
             for thread in self.page_threads:
                 thread.join()
@@ -272,7 +272,7 @@ class konadl:
 
             self.download_queue.join()
             for _ in range(self.downloader_threads_amount):
-                self.download_queue.put((None, None))
+                self.download_queue.put((None, None, None))
             for thread in self.downloader_threads:
                 thread.join()
             self.job_done = True
@@ -285,7 +285,7 @@ class konadl:
 
             self.download_queue.queue.clear()
             for _ in range(self.downloader_threads_amount):
-                self.download_queue.put((None, None))
+                self.download_queue.put((None, None, None))
             for thread in self.downloader_threads:
                 thread.join()
 
@@ -360,7 +360,7 @@ class konadl:
                     url = post.find('a', {'class': 'directlink'})['href']
                     if 'https:' not in url:
                         url = '{}{}'.format('https:', url)
-                    self.download_queue.put((url, page))
+                    self.download_queue.put((url, page, rating))
 
     def retrieve_post_image_worker(self, download_queue):
         """ Get the large image url and download
@@ -370,14 +370,17 @@ class konadl:
         """
         while True:
             try:
-                url, page = download_queue.get()
+                url, page, rating = download_queue.get()
                 if url is None:
                     self.print_thread_exit(
                         str(threading.current_thread().name))
                     break
                 self.print_retrieval(url, page)
                 file_name = url.split("/")[-1].replace('%20', '_').replace('_-_', '_')
-                file_path = '{}{}.{}'.format(self.storage, file_name, url.split(".")[-1])
+                subfolder = ''
+                if self.separate:
+                    subfolder = '{}/'.format(rating)
+                file_path = '{}{}{}'.format(self.storage, subfolder, file_name)
                 image_request = requests.get(url, headers=self.headers)
                 with open(file_path, 'wb') as file:
                     file_length = file.write(image_request.content)
@@ -388,7 +391,7 @@ class konadl:
                     if image_request.status_code == 429:
                         self.print_429()
                     download_queue.task_done()
-                    download_queue.put((url, page))
+                    download_queue.put((url, page, rating))
                     if os.path.isfile(file_path):
                         os.remove(file_path)
                     image_request.raise_for_status()
@@ -400,7 +403,7 @@ class konadl:
                 self.write_traceback(url=url, page=page)
                 self.print_exception()
                 download_queue.task_done()
-                download_queue.put((url, page))
+                download_queue.put((url, page, rating))
                 if os.path.isfile(file_path):
                     os.remove(file_path)
 
@@ -444,7 +447,7 @@ class konadl:
                         url = post.find('a', {'class': 'directlink'})['href']
                         if 'https:' not in url:
                             url = '{}{}'.format('https:', url)
-                        self.download_queue.put((url, page))
+                        self.download_queue.put((url, page, rating))
                 post_queue.task_done()
             except requests.exceptions.HTTPError:
                 self.write_traceback(page=page)
@@ -493,8 +496,8 @@ class konadl:
         """
         with open('{}download_queue.progress'.format(self.storage), 'w') as download_progress:
             while not self.download_queue.empty():
-                link, page = self.download_queue.get()
-                download_progress.write('{}|{}\n'.format(link, str(page)))
+                link, page, rating = self.download_queue.get()
+                download_progress.write('{}|{}|{}\n'.format(link, str(page), rating))
                 self.download_queue.task_done()
             download_progress.close()
 
@@ -539,7 +542,7 @@ class konadl:
         try:
             with open('{}download_queue.progress'.format(self.storage), 'r') as download_progress:
                 for line in download_progress:
-                    self.download_queue.put((line.split('|')[0], int(line.split('|')[1].strip('\n'))))
+                    self.download_queue.put((line.split('|')[0], int(line.split('|')[1]), line.split('|')[2].strip('\n')))
                 download_progress.close()
 
             with open('{}post_queue.progress'.format(self.storage), 'r') as post_progress:
