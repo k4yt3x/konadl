@@ -18,7 +18,7 @@ import os
 import time
 import traceback
 
-VERSION = '1.3.5'
+VERSION = '1.3.6'
 
 
 def process_arguments():
@@ -34,6 +34,7 @@ def process_arguments():
     control_group.add_argument('-p', '--page', help='Crawl a specific page', type=int, action='store', default=False)
     control_group.add_argument('-y', '--yandere', help='Crawl Yande.re site', action='store_true', default=False)
     control_group.add_argument('-o', '--storage', help='Storage directory', action='store', default=False)
+    control_group.add_argument('--separate', help='Separate images into folders by ratings', action='store_true', default=False)
     control_group.add_argument('-u', '--update', help='Update new images', action='store_true', default=False)
     ratings_group = parser.add_argument_group('Ratings')
     ratings_group.add_argument('-s', '--safe', help='Include Safe rated images', action='store_true', default=False)
@@ -66,6 +67,9 @@ def check_storage_dir(args):
             if avalon.ask('Create storage directory?', True):
                 try:
                     if not os.mkdir(storage):
+                        os.mkdir('{}/safe'.format(storage))
+                        os.mkdir('{}/questionable'.format(storage))
+                        os.mkdir('{}/explicit'.format(storage))
                         avalon.info('Successfully created storage directory')
                         return storage
                 except PermissionError:
@@ -202,6 +206,7 @@ try:
                 kona.remove_progress_files()
 
         # Pass terminal arguments to libkonadl object
+        kona.separate = args.separate
         kona.yandere = args.yandere
         kona.safe = args.safe
         kona.questionable = args.questionable
