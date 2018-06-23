@@ -18,7 +18,7 @@ import os
 import time
 import traceback
 
-VERSION = '1.3.6'
+VERSION = '1.3.7'
 
 
 def process_arguments():
@@ -67,9 +67,10 @@ def check_storage_dir(args):
             if avalon.ask('Create storage directory?', True):
                 try:
                     if not os.mkdir(storage):
-                        os.mkdir('{}/safe'.format(storage))
-                        os.mkdir('{}/questionable'.format(storage))
-                        os.mkdir('{}/explicit'.format(storage))
+                        if args.separate:
+                            os.mkdir('{}/safe'.format(storage))
+                            os.mkdir('{}/questionable'.format(storage))
+                            os.mkdir('{}/explicit'.format(storage))
                         avalon.info('Successfully created storage directory')
                         return storage
                 except PermissionError:
