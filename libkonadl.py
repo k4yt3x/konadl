@@ -11,8 +11,8 @@
 
 Name: Konachan Downloader Library
 Dev: K4YT3X
-Date Created: 11 Apr. 2018
-Last Modified: 28 Apr. 2018
+Date Created: April 11, 2018
+Last Modified: July 7, 2018
 
 Licensed under the GNU General Public License Version 3 (GNU GPL v3),
     available at: https://www.gnu.org/licenses/gpl-3.0.txt
@@ -64,7 +64,7 @@ class konadl:
         """
         self.begin_time = time.time()
         self.time_elapsed = 0
-        self.VERSION = '1.8 alpha2'
+        self.VERSION = '1.8.1'
         self.storage = '/tmp/konachan/'
         self.separate = False
         self.total_downloads = 0
@@ -527,6 +527,7 @@ class konadl:
             progress['STATISTICS']['time_elapsed'] = '0'
         progress['UPDATING'] = {}
         progress['UPDATING']['previous_newest_id'] = self.current_newest_id
+        progress['UPDATING']['SEPARATE'] = str(int(self.separate))
 
         with open('{}metadata.progress'.format(self.storage), 'w') as progressf:
             progress.write(progressf)
@@ -564,6 +565,7 @@ class konadl:
         self.total_downloads += int(progress['STATISTICS']['total_downloads'])
         self.time_elapsed = float(progress['STATISTICS']['time_elapsed'])
         self.previous_newest_id = progress['UPDATING']['previous_newest_id']
+        self.separate = bool(int(progress['UPDATING']['SEPARATE']))
 
     @print_locker
     def warn_keyboard_interrupt(self):
