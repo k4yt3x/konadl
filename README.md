@@ -2,8 +2,8 @@
 
 **Please read the [EULA](https://github.com/K4YT3X/KonaDL#eula) section carefully before starting to use this software.**
 
-libkonadl Version: **1.8 alpha2**  
-KonaDL CLI Version: **1.3.6**
+libkonadl Version: **1.8.1**  
+KonaDL CLI Version: **1.3.7**
 
 </br>
 
@@ -20,10 +20,11 @@ Just preventing people from missing this.
 
 </br>
 
-### Beta Version (1.8 alpha2) Changes
+### Beta Version (1.8.1) Changes
 
-1. Images downloaded can now be stored in separate folders according to ratings
-1. You can now update newly added images to a download
+1. Seperated download will now be remembered
+2. Images downloaded can now be stored in separate folders according to ratings
+3. You can now update newly added images to a download
 
 
 ### Stable Version (1.7.1) Changes
