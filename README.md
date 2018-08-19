@@ -1,11 +1,11 @@
 # Konachan Downloader
 
-**Please read the [EULA](https://github.com/K4YT3X/KonaDL#eula) section carefully before starting to use this software.**
+**Please read the [EULA](https://github.com/K4YT3X/konadl#eula) section carefully before starting to use this software.**
 
 libkonadl Version: **1.8.1**  
 KonaDL CLI Version: **1.3.7**
 
-</br>
+## **[Video Demo](https://youtu.be/a2_tC_uugP4)**
 
 ## Important Features
 
@@ -84,8 +84,8 @@ If you're an ordinary user and want to download images with it, here's how you c
 
 First, clone the project:
 ```
-$ git clone https://github.com/K4YT3X/KonaDL.git
-$ cd KonaDL
+$ git clone https://github.com/K4YT3X/konadl.git
+$ cd konadl
 ```
 
 Then simply execute konadl_cli.py.
