@@ -10,14 +10,14 @@ Licensed under the GNU General Public License Version 3 (GNU GPL v3),
 (C) 2018 K4YT3X
 """
 from avalon_framework import Avalon
-from libkonadl import konadl  # Import libkonadl
+from libkonadl import Konadl  # Import libkonadl
 from libkonadl import print_locker
 import argparse
 import os
 import time
 import traceback
 
-VERSION = '1.3.8'
+VERSION = '1.3.9'
 
 
 def process_arguments():
@@ -124,7 +124,7 @@ def display_options(kona, load_progress, args):
     Avalon.info('Opening {}{}{}{}{} downloader threads\n'.format(Avalon.FG.W, Avalon.FM.BD, args.downloaders, Avalon.FM.RST, Avalon.FG.G))
 
 
-class konadl_avalon(konadl):
+class KonadlAvalon(Konadl):
     """ Overwrite original methods for better
     appearance and readability using avalon
     framework.
@@ -176,7 +176,7 @@ args = process_arguments()
 
 try:
     if __name__ == '__main__':
-        kona = konadl_avalon()  # Create crawler object
+        kona = KonadlAvalon()  # Create crawler object
         kona.icon()
 
         if args.version:  # prints program legal / dev / version info
