@@ -2,23 +2,22 @@
 # -*- coding: utf-8 -*-
 """
 Name: Konachan Downloader CLI for Linux
-Date Created: 13 Apr. 2018
-Last Modified: 28 Apr. 2018
+Date Created: April 13, 2018
+Last Modified: October 19, 2018
 
 Licensed under the GNU General Public License Version 3 (GNU GPL v3),
     available at: https://www.gnu.org/licenses/gpl-3.0.txt
 (C) 2018 K4YT3X
 """
-
+from avalon_framework import Avalon
 from libkonadl import konadl  # Import libkonadl
 from libkonadl import print_locker
 import argparse
-import avalon_framework as avalon
 import os
 import time
 import traceback
 
-VERSION = '1.3.7'
+VERSION = '1.3.8'
 
 
 def process_arguments():
@@ -61,28 +60,28 @@ def check_storage_dir(args):
         storage += '/'
     if not os.path.isdir(storage):
         if os.path.isfile(storage) or os.path.islink(storage):
-            avalon.error('Storage path specified is a file/link')
+            Avalon.error('Storage path specified is a file/link')
         else:
-            avalon.warning('Storage directory not found')
-            if avalon.ask('Create storage directory?', True):
+            Avalon.warning('Storage directory not found')
+            if Avalon.ask('Create storage directory?', True):
                 try:
                     if not os.mkdir(storage):
                         if args.separate:
                             os.mkdir('{}/safe'.format(storage))
                             os.mkdir('{}/questionable'.format(storage))
                             os.mkdir('{}/explicit'.format(storage))
-                        avalon.info('Successfully created storage directory')
+                        Avalon.info('Successfully created storage directory')
                         return storage
                 except PermissionError:
-                    avalon.error('Insufficient permission to create the specified directory\n')
+                    Avalon.error('Insufficient permission to create the specified directory\n')
                     exit(1)
                 except Exception:
-                    avalon.error('An error occurred while trying to create storage directory\n')
+                    Avalon.error('An error occurred while trying to create storage directory\n')
                     traceback.print_exc()
                     exit(0)
             else:
-                avalon.error('Storage directory not found')
-                avalon.error('Unable to proceed\n')
+                Avalon.error('Storage directory not found')
+                Avalon.error('Unable to proceed\n')
                 exit(1)
     return storage
 
@@ -97,32 +96,32 @@ def display_options(kona, load_progress, args):
     Also shows other supplement information if any. More to
     be added in the future.
     """
-    avalon.dbgInfo('Program Started')
-    avalon.info('Using storage directory: {}{}'.format(avalon.FG.W, kona.storage))
+    Avalon.debug_info('Program Started')
+    Avalon.info('Using storage directory: {}{}'.format(Avalon.FG.W, kona.storage))
     if load_progress or args.update:
-        avalon.info('Sourcing configuration defined in the metadata file')
+        Avalon.info('Sourcing configuration defined in the metadata file')
     else:
         if kona.safe:
-            avalon.info('Including {}{}SAFE{}{} rated images'.format(avalon.FG.W, avalon.FM.BD, avalon.FM.RST, avalon.FG.G))
+            Avalon.info('Including {}{}SAFE{}{} rated images'.format(Avalon.FG.W, Avalon.FM.BD, Avalon.FM.RST, Avalon.FG.G))
         if kona.questionable:
-            avalon.warning('Including {}QUESTIONABLE{} rated images'.format(avalon.FG.W, avalon.FG.Y))
+            Avalon.warning('Including {}QUESTIONABLE{} rated images'.format(Avalon.FG.W, Avalon.FG.Y))
         if kona.explicit:
-            avalon.warning('Including {}EXPLICIT{} rated images'.format(avalon.FG.R, avalon.FG.Y))
+            Avalon.warning('Including {}EXPLICIT{} rated images'.format(Avalon.FG.R, Avalon.FG.Y))
         if kona.yandere:
-            avalon.info('Crawling yande.re')
+            Avalon.info('Crawling yande.re')
 
         if args.pages:
             if args.pages == 1:
-                avalon.info('Crawling {}{}{}{}{} Page\n'.format(avalon.FG.W, avalon.FM.BD, args.pages, avalon.FM.RST, avalon.FG.G))
+                Avalon.info('Crawling {}{}{}{}{} Page\n'.format(Avalon.FG.W, Avalon.FM.BD, args.pages, Avalon.FM.RST, Avalon.FG.G))
             else:
-                avalon.info('Crawling {}{}{}{}{} Pages\n'.format(avalon.FG.W, avalon.FM.BD, args.pages, avalon.FM.RST, avalon.FG.G))
+                Avalon.info('Crawling {}{}{}{}{} Pages\n'.format(Avalon.FG.W, Avalon.FM.BD, args.pages, Avalon.FM.RST, Avalon.FG.G))
         elif args.all:
-            avalon.warning('Crawling {}ALL{} Pages\n'.format(avalon.FG.W, avalon.FG.Y))
+            Avalon.warning('Crawling {}ALL{} Pages\n'.format(Avalon.FG.W, Avalon.FG.Y))
         elif args.page:
-            avalon.info('Crawling Page #{}'.format(args.page))
+            Avalon.info('Crawling Page #{}'.format(args.page))
 
-    avalon.info('Opening {}{}{}{}{} crawler threads'.format(avalon.FG.W, avalon.FM.BD, args.crawlers, avalon.FM.RST, avalon.FG.G))
-    avalon.info('Opening {}{}{}{}{} downloader threads\n'.format(avalon.FG.W, avalon.FM.BD, args.downloaders, avalon.FM.RST, avalon.FG.G))
+    Avalon.info('Opening {}{}{}{}{} crawler threads'.format(Avalon.FG.W, Avalon.FM.BD, args.crawlers, Avalon.FM.RST, Avalon.FG.G))
+    Avalon.info('Opening {}{}{}{}{} downloader threads\n'.format(Avalon.FG.W, Avalon.FM.BD, args.downloaders, Avalon.FM.RST, Avalon.FG.G))
 
 
 class konadl_avalon(konadl):
@@ -133,44 +132,44 @@ class konadl_avalon(konadl):
 
     @print_locker
     def warn_keyboard_interrupt(self):
-        avalon.warning('[Main Thread] KeyboardInterrupt Caught!')
-        avalon.warning('[Main Thread] Flushing queues and exiting')
+        Avalon.warning('[Main Thread] KeyboardInterrupt Caught!')
+        Avalon.warning('[Main Thread] Flushing queues and exiting')
 
     @print_locker
     def print_saving_progress(self):
-        avalon.info('[Main Thread] Saving progress to {}{}{}'.format(avalon.FG.W, avalon.FM.BD, self.storage))
+        Avalon.info('[Main Thread] Saving progress to {}{}{}'.format(Avalon.FG.W, Avalon.FM.BD, self.storage))
 
     def print_loading_progress(self):
-        avalon.info('[Main Thread] Loading progress from {}{}{}'.format(avalon.FG.W, avalon.FM.BD, self.storage))
+        Avalon.info('[Main Thread] Loading progress from {}{}{}'.format(Avalon.FG.W, Avalon.FM.BD, self.storage))
 
     @print_locker
     def print_retrieval(self, url, page):
-        avalon.dbgInfo("[Page={}] Retrieving: {}".format(page, url))
+        Avalon.debug_info("[Page={}] Retrieving: {}".format(page, url))
 
     @print_locker
     def print_crawling_page(self, page):
-        avalon.info('Crawling page: {}{}#{}'.format(avalon.FM.BD, avalon.FG.W, page))
+        Avalon.info('Crawling page: {}{}#{}'.format(Avalon.FM.BD, Avalon.FG.W, page))
 
     @print_locker
     def print_thread_exit(self, name):
-        avalon.dbgInfo('[libkonadl] {} thread exiting'.format(name))
+        Avalon.debug_info('[libkonadl] {} thread exiting'.format(name))
 
     @print_locker
     def print_429(self):
-        avalon.error('HTTP Error 429: You are sending too many requests')
-        avalon.warning('Trying to recover from error')
-        avalon.warning('Putting job back to queue')
+        Avalon.error('HTTP Error 429: You are sending too many requests')
+        Avalon.warning('Trying to recover from error')
+        Avalon.warning('Putting job back to queue')
 
     @print_locker
     def print_exception(self):
-        avalon.error('An error has occurred in this thread')
-        avalon.warning('Trying to recover from error')
-        avalon.warning('Putting job back to queue')
+        Avalon.error('An error has occurred in this thread')
+        Avalon.warning('Trying to recover from error')
+        Avalon.warning('Putting job back to queue')
 
     @print_locker
     def print_faulty_progress_file(self):
-        avalon.error('Faulty progress file!')
-        avalon.error('Aborting\n')
+        Avalon.error('Faulty progress file!')
+        Avalon.error('Aborting\n')
 
 
 args = process_arguments()
@@ -191,19 +190,19 @@ try:
 
         kona.storage = check_storage_dir(args)
         if kona.storage is False:
-            avalon.error('Please specify storage directory\n')
+            Avalon.error('Please specify storage directory\n')
             exit(1)
 
         # If progress file exists
         # Ask user if he or she wants to load it
         load_progress = False
         if kona.progress_files_present():
-            avalon.info('Progress file found')
-            if avalon.ask('Continue from where you left off?', True):
+            Avalon.info('Progress file found')
+            if Avalon.ask('Continue from where you left off?', True):
                 kona.load_progress = True
                 load_progress = True
             else:
-                avalon.info('Starting new download progress')
+                Avalon.info('Starting new download progress')
                 kona.remove_progress_files()
 
         # Pass terminal arguments to libkonadl object
@@ -217,28 +216,28 @@ try:
         display_options(kona, load_progress, args)
 
         if not kona.safe and not kona.questionable and not kona.explicit and not load_progress and not args.update:
-            avalon.error('Please supply information about what you want to download')
-            print(avalon.FM.BD + 'You must include one of the following arguments:')
+            Avalon.error('Please supply information about what you want to download')
+            print(Avalon.FM.BD + 'You must include one of the following arguments:')
             print('  -s, --safe            Include Safe rated images')
             print('  -q, --questionable    Include Questionable rated images')
             print('  -e, --explicit        Include Explicit rated images')
-            print('Use --help for more information\n' + avalon.FM.RST)
+            print('Use --help for more information\n' + Avalon.FM.RST)
             exit(1)
         elif not args.pages and not args.all and not args.page and not load_progress and not args.update:
-            avalon.error('Please supply information about what you want to download')
-            print(avalon.FM.BD + 'You must include one of the following arguments:')
+            Avalon.error('Please supply information about what you want to download')
+            print(Avalon.FM.BD + 'You must include one of the following arguments:')
             print('  -n PAGES, --pages PAGES')
             print('                        Number of pages to download')
             print('  -a, --all             Download all images')
             print('  -p PAGE, --page PAGE  Crawl a specific page')
-            print('Use --help for more information\n' + avalon.FM.RST)
+            print('Use --help for more information\n' + Avalon.FM.RST)
 
         if load_progress:
             kona.crawl()
         elif args.update:
-            avalon.info('Updating new images')
+            Avalon.info('Updating new images')
             if kona.update() is False:
-                avalon.info('{}{}No new images found\n'.format(avalon.FM.BD, avalon.FG.W))
+                Avalon.info('{}{}No new images found\n'.format(Avalon.FM.BD, Avalon.FG.W))
         elif args.pages:
             kona.pages = args.pages
             kona.crawl()
@@ -247,26 +246,26 @@ try:
         elif args.page:
             kona.crawl_page(args.page)
 
-        avalon.info('Main thread exited without errors')
-        avalon.info('{}{}{}{}{} image(s) downloaded'.format(avalon.FG.W, avalon.FM.BD, kona.total_downloads, avalon.FM.RST, avalon.FG.G))
-        avalon.info('Time taken: {}{}{}{}{} seconds'.format(avalon.FG.W, avalon.FM.BD, round(
-            (time.time() - kona.begin_time + kona.time_elapsed), 5), avalon.FM.RST, avalon.FG.G))
+        Avalon.info('Main thread exited without errors')
+        Avalon.info('{}{}{}{}{} image(s) downloaded'.format(Avalon.FG.W, Avalon.FM.BD, kona.total_downloads, Avalon.FM.RST, Avalon.FG.G))
+        Avalon.info('Time taken: {}{}{}{}{} seconds'.format(Avalon.FG.W, Avalon.FM.BD, round(
+            (time.time() - kona.begin_time + kona.time_elapsed), 5), Avalon.FM.RST, Avalon.FG.G))
         if kona.job_done:
-            avalon.info('All downloads complete')
+            Avalon.info('All downloads complete')
             if kona.progress_files_present():
-                avalon.info('Removing progress file')
+                Avalon.info('Removing progress file')
                 kona.remove_progress_files()
     else:
-        avalon.error('This file cannot be imported as a module!')
+        Avalon.error('This file cannot be imported as a module!')
         raise SystemError('Cannot be imported')
 except KeyboardInterrupt:
-    avalon.warning('Ctrl+C detected in CLI Module')
-    avalon.warning('Exiting program\n')
+    Avalon.warning('Ctrl+C detected in CLI Module')
+    Avalon.warning('Exiting program\n')
     exit(0)
 except Exception:
-    avalon.error('An error occurred during the execution of the program')
+    Avalon.error('An error occurred during the execution of the program')
     traceback.print_exc()
-    avalon.warning('This is critical information for fixing bugs and errors')
-    avalon.warning('If you\'re kind enough wanting to help improving this program,')
-    avalon.warning('please contact the developer.')
+    Avalon.warning('This is critical information for fixing bugs and errors')
+    Avalon.warning('If you\'re kind enough wanting to help improving this program,')
+    Avalon.warning('please contact the developer.')
     exit(1)
