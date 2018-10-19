@@ -23,14 +23,44 @@ script / library that will help you download
 konachan.com / konachan.net images.
 """
 from bs4 import BeautifulSoup
-import configparser
+from queue import Queue as _Queue
+import copyreg
 import datetime
+import json
 import os
-import queue
+import pickle
 import requests
+import sys
 import threading
 import time
 import traceback
+
+
+# Make Queue a new-style class, so it can be used with copy_reg
+class Queue(_Queue, object):
+    pass
+
+
+def pickle_queue(q):
+    # Shallow copy of __dict__ (the underlying deque isn't actually copied, so this is fast)
+    q_dct = q.__dict__.copy()
+    # Remove all non-picklable synchronization primitives
+    del q_dct['mutex']
+    del q_dct['not_empty']
+    del q_dct['not_full']
+    del q_dct['all_tasks_done']
+    return Queue, (), q_dct
+
+
+def unpickle_queue(state):
+    # Recreate our queue.
+    q = state[0]()
+    q.mutex = threading.Lock()
+    q.not_empty = threading.Condition(q.mutex)
+    q.not_full = threading.Condition(q.mutex)
+    q.all_tasks_done = threading.Condition(q.mutex)
+    q.__dict__ = state[2]
+    return q
 
 
 def print_locker(function):
@@ -47,7 +77,7 @@ def print_locker(function):
     return wrapper
 
 
-class konadl:
+class Konadl:
     """
     Konachan Downloader
 
@@ -64,7 +94,7 @@ class konadl:
         """
         self.begin_time = time.time()
         self.time_elapsed = 0
-        self.VERSION = '1.8.1'
+        self.VERSION = '1.9.0'
         self.storage = '/tmp/konachan/'
         self.separate = False
         self.total_downloads = 0
@@ -141,14 +171,16 @@ class konadl:
         self.error_logs_file = '{}errors.log'.format(self.storage)
 
         # Initialize page queue and downloader queue
-        self.post_queue = queue.Queue()
-        self.download_queue = queue.Queue()
+        copyreg.pickle(Queue, pickle_queue, unpickle_queue)
+        self.post_queue = Queue()
+        self.download_queue = Queue()
         # Prepare containers for threads
         self.page_threads = []
         self.downloader_threads = []
 
         self.print_lock = threading.Lock()
         self.error_log_lock = threading.Lock()
+        self.abort = False
 
         # load progress from progress file if needed
         if self.load_progress:
@@ -159,8 +191,7 @@ class konadl:
 
             # Create post crawler threads
             for identifier in range(self.post_crawler_threads_amount):
-                thread = threading.Thread(target=self.crawl_post_page_worker, args=(
-                    self.post_queue, self.download_queue))
+                thread = threading.Thread(target=self.crawl_post_page_worker)
                 thread.name = 'Post Crawler {}'.format(identifier)
                 thread.start()
                 self.page_threads.append(thread)
@@ -168,7 +199,7 @@ class konadl:
             # Create image downloader threads
             for identifier in range(self.downloader_threads_amount):
                 thread = threading.Thread(
-                    target=self.retrieve_post_image_worker, args=(self.download_queue,))
+                    target=self.retrieve_post_image_worker)
                 thread.name = 'Downloader {}'.format(identifier)
                 thread.start()
                 self.downloader_threads.append(thread)
@@ -179,8 +210,15 @@ class konadl:
                     self.post_queue.put(page_num)
 
             # Wait for all jobs to be done
-            self.post_queue.join()
-            self.download_queue.join()
+            # We are not using Queue.join() since if the session is restored,
+            # Queue will not join even when all jobs are done.
+            if self.load_progress:
+                while not self.post_queue.empty() or not self.download_queue.empty():
+                    time.sleep(0.1)  # Make each tick longer than pass
+            else:
+                self.post_queue.join()
+                self.download_queue.join()
+
             # Send exit signal to all threads
             for _ in range(self.post_crawler_threads_amount):
                 self.post_queue.put(None)
@@ -199,6 +237,7 @@ class konadl:
             # Main thread catches KeyboardInterrupt
             # Clear queues and put None as exit signal
             self.warn_keyboard_interrupt()
+            self.abort = True
             if not self.download_queue.empty():
                 self.save_queues()
 
@@ -247,8 +286,8 @@ class konadl:
         self.error_logs_file = '{}errors.log'.format(self.storage)
 
         # Initialize page queue and downloader queue
-        self.post_queue = queue.Queue()
-        self.download_queue = queue.Queue()
+        self.post_queue = Queue()
+        self.download_queue = Queue()
         # Prepare containers for threads
         self.downloader_threads = []
 
@@ -295,7 +334,7 @@ class konadl:
     def get_total_pages(self):
         # Crawl the first post page and read the number of total pages
         index_page = requests.get('{}/post?page=1&tags='.format(self.site_root), headers=self.headers).text
-        index_soup = BeautifulSoup(index_page, "html.parser")
+        index_soup = BeautifulSoup(index_page, 'html.parser')
         # Find the page number of the last page
         return int(index_soup.findAll('a', href=True)[-10].text)
 
@@ -307,7 +346,7 @@ class konadl:
         ratings.
         """
         index_page = requests.get('{}/post?page=1&tags='.format(self.site_root), headers=self.headers).text
-        index_soup = BeautifulSoup(index_page, "html.parser")
+        index_soup = BeautifulSoup(index_page, 'html.parser')
         posts_list = index_soup.find('ul', {'id': 'post-list-posts'})
         posts = posts_list.findAll('li')
         for post in posts:
@@ -328,7 +367,7 @@ class konadl:
         Crawl the site and append all the new images
         since the last download into download_queue
         """
-        update_post_queue = queue.Queue()
+        update_post_queue = Queue()
         for page_num in range(1, self.get_total_pages() + 1):
             update_post_queue.put(page_num)
 
@@ -362,78 +401,108 @@ class konadl:
                         url = '{}{}'.format('https:', url)
                     self.download_queue.put((url, page, rating))
 
-    def retrieve_post_image_worker(self, download_queue):
+    def retrieve_post_image_worker(self):
         """ Get the large image url and download
 
         Crawls the post page, find the large image url(s)
         and calls the downloader to download all of them.
         """
-        while True:
+
+        # Always check if main thread wants to abort before getting a job
+        while not self.abort:
             try:
-                url, page, rating = download_queue.get()
+
+                # Get a job from queue
+                url, page, rating = self.download_queue.get()
+
+                # Check if main thread wants to exit
                 if url is None:
-                    self.print_thread_exit(
-                        str(threading.current_thread().name))
                     break
+
+                # Start retrieving image
                 self.print_retrieval(url, page)
                 file_name = url.split("/")[-1].replace('%20', '_').replace('_-_', '_')
                 subfolder = ''
+
+                # Store into subdirectories if requested
                 if self.separate:
                     subfolder = '{}/'.format(rating)
                 file_path = '{}{}{}'.format(self.storage, subfolder, file_name)
+
+                # Get image
                 image_request = requests.get(url, headers=self.headers)
+
+                # Write image to file
                 with open(file_path, 'wb') as file:
                     file_length = file.write(image_request.content)
                     file.close()
+
+                # Check image integrity
                 if int(image_request.headers['content-length']) != file_length:
                     raise Exception('Faulty download')
+
+                # Put job back to queue if 429 detected and warn user
                 elif image_request.status_code != requests.codes.ok:
                     if image_request.status_code == 429:
                         self.print_429()
-                    download_queue.task_done()
-                    download_queue.put((url, page, rating))
+                    self.download_queue.task_done()
+                    self.download_queue.put((url, page, rating))
                     if os.path.isfile(file_path):
                         os.remove(file_path)
                     image_request.raise_for_status()
                 self.total_downloads += 1
-                download_queue.task_done()
+                self.download_queue.task_done()
             except requests.exceptions.HTTPError:
                 self.write_traceback(page=page)
             except Exception:
                 self.write_traceback(url=url, page=page)
                 self.print_exception()
-                download_queue.task_done()
-                download_queue.put((url, page, rating))
+                self.download_queue.task_done()
+                self.download_queue.put((url, page, rating))
                 if os.path.isfile(file_path):
                     os.remove(file_path)
 
-    def crawl_post_page_worker(self, post_queue, download_queue):
+        # Print exit message when thread exits
+        self.print_thread_exit(str(threading.current_thread().name))
+
+    def crawl_post_page_worker(self):
         """ Crawl the post list page and find posts
 
         Craws the posts index pages and record every post's
         URL before handing them to the image downloader.
         """
-        while True:
+
+        # Always check if main thread wants to abort before getting a job
+        while not self.abort:
             try:
-                page = post_queue.get()
+                # Get job from queue
+                page = self.post_queue.get()
                 if page is None:
-                    self.print_thread_exit(
-                        str(threading.current_thread().name))
                     break
+
                 self.print_crawling_page(page)
+
+                # Get the page source
                 page_source = requests.get(
                     '{}/post?page={}&tags='.format(self.site_root, page), headers=self.headers)
+
+                # Put job back to queue if 429 received, and warn the user
                 if page_source.status_code != requests.codes.ok:
                     if page_source.status_code == 429:
                         self.print_429()
-                    post_queue.task_done()
-                    post_queue.put(page)
+                    self.post_queue.task_done()
+                    self.post_queue.put(page)
                     page_source.raise_for_status()
+
+                # Start parsing page
                 soup = BeautifulSoup(page_source.text, "html.parser")
+
                 # Find large image link and ratings
                 posts_list = soup.find('ul', {'id': 'post-list-posts'})
                 posts = posts_list.findAll('li')
 
+                # For every post, if its rating is what we want, add the
+                # post into the download_queue
                 for post in posts:
                     alt = post.find('img', alt=True)['alt']
                     rating = False
@@ -448,19 +517,22 @@ class konadl:
                         if 'https:' not in url:
                             url = '{}{}'.format('https:', url)
                         self.download_queue.put((url, page, rating))
-                post_queue.task_done()
+                self.post_queue.task_done()
             except requests.exceptions.HTTPError:
                 self.write_traceback(page=page)
             except Exception:
                 self.write_traceback(page=page)
                 self.print_exception()
-                post_queue.task_done()
-                post_queue.put(page)
+                self.post_queue.task_done()
+                self.post_queue.put(page)
+
+        # Print exit message when thread exits
+        self.print_thread_exit(str(threading.current_thread().name))
 
     def progress_files_present(self):
         # Determines if the progress files are present
-        self.progress_files = ['{}download_queue.progress'.format(self.storage),
-                               '{}post_queue.progress'.format(self.storage)]
+        self.progress_files = ['{}download_queue.pkl'.format(self.storage),
+                               '{}post_queue.pkl'.format(self.storage)]
         for file in self.progress_files:
             if not os.path.isfile(file):
                 return False
@@ -476,36 +548,16 @@ class konadl:
                 pass
 
     def metadata_present(self):
-        return os.path.isfile('{}metadata.progress'.format(self.storage))
+        return os.path.isfile('{}metadata.json'.format(self.storage))
 
     def remove_metatada(self):
         # Remove metadata
         # Called when an old download progress is to be
         # removed
         try:
-            os.remove('{}metadata.progress'.format(self.storage))
+            os.remove('{}metadata.json'.format(self.storage))
         except FileNotFoundError:
             pass
-
-    def save_queues(self):
-        """ Saves the queues to files
-
-        This method should be called before the queue is cleared.
-        It will write all the items in download_queue and page_queue
-        into the progress files.
-        """
-        with open('{}download_queue.progress'.format(self.storage), 'w') as download_progress:
-            while not self.download_queue.empty():
-                link, page, rating = self.download_queue.get()
-                download_progress.write('{}|{}|{}\n'.format(link, str(page), rating))
-                self.download_queue.task_done()
-            download_progress.close()
-
-        with open('{}post_queue.progress'.format(self.storage), 'w') as post_progress:
-            while not self.post_queue.empty():
-                post_progress.write('{}\n'.format(self.post_queue.get()))
-                self.post_queue.task_done()
-            post_progress.close()
 
     def save_metadata(self):
         """ Saves the settings and stats into file
@@ -514,23 +566,54 @@ class konadl:
         and time information into file.
         """
         self.print_saving_progress()
-        progress = configparser.ConfigParser()
-        progress['RATINGS'] = {}
-        progress['RATINGS']['safe'] = str(int(self.safe))
-        progress['RATINGS']['questionable'] = str(int(self.questionable))
-        progress['RATINGS']['explicit'] = str(int(self.explicit))
-        progress['STATISTICS'] = {}
-        progress['STATISTICS']['total_downloads'] = str(self.total_downloads)
-        progress['STATISTICS']['time_elapsed'] = str(round((time.time() - self.begin_time), 5))
-        if self.job_done:
-            progress['STATISTICS']['total_downloads'] = '0'
-            progress['STATISTICS']['time_elapsed'] = '0'
-        progress['UPDATING'] = {}
-        progress['UPDATING']['previous_newest_id'] = self.current_newest_id
-        progress['UPDATING']['SEPARATE'] = str(int(self.separate))
 
-        with open('{}metadata.progress'.format(self.storage), 'w') as progressf:
-            progress.write(progressf)
+        metadata = {}
+        metadata['RATINGS'] = {}
+        metadata['RATINGS']['safe'] = self.safe
+        metadata['RATINGS']['questionable'] = self.questionable
+        metadata['RATINGS']['explicit'] = self.explicit
+        metadata['STATISTICS'] = {}
+        metadata['STATISTICS']['total_downloads'] = self.total_downloads
+        metadata['STATISTICS']['time_elapsed'] = round((time.time() - self.begin_time), 5)
+        if self.job_done:
+            metadata['STATISTICS']['total_downloads'] = 0
+            metadata['STATISTICS']['time_elapsed'] = 0
+        metadata['UPDATING'] = {}
+        metadata['UPDATING']['previous_newest_id'] = self.current_newest_id
+        metadata['UPDATING']['SEPARATE'] = self.separate
+
+        with open('{}metadata.json'.format(self.storage), 'w') as progressf:
+            json.dump(metadata, progressf, indent=2)
+
+    def read_metadata(self):
+        with open('{}metadata.json'.format(self.storage), 'r') as progressf:
+            metadata = json.load(progressf)
+            progressf.close()
+        self.safe = metadata['RATINGS']['safe']
+        self.questionable = metadata['RATINGS']['questionable']
+        self.explicit = metadata['RATINGS']['explicit']
+        self.total_downloads += metadata['STATISTICS']['total_downloads']
+        self.time_elapsed = metadata['STATISTICS']['time_elapsed']
+        self.previous_newest_id = metadata['UPDATING']['previous_newest_id']
+        self.separate = metadata['UPDATING']['SEPARATE']
+
+    def save_queues(self):
+        """ Saves the queues to files
+
+        This method should be called before the queue is cleared.
+        It will write all the items in download_queue and page_queue
+        into the progress files.
+        """
+
+        # Serialize download queue and dump to file
+        with open('{}download_queue.pkl'.format(self.storage), 'wb') as download_progress:
+            pickle.dump(self.download_queue, download_progress)
+            download_progress.close()
+
+        # Serialize post queue and dump to file
+        with open('{}post_queue.pkl'.format(self.storage), 'wb') as post_progress:
+            pickle.dump(self.post_queue, post_progress)
+            post_progress.close()
 
     def read_queues(self):
         """ Reads the download progress
@@ -538,40 +621,31 @@ class konadl:
         Parses the download progress and returns
         the configuration file contents.
         """
+
         self.print_loading_progress()
 
         try:
-            with open('{}download_queue.progress'.format(self.storage), 'r') as download_progress:
-                for line in download_progress:
-                    self.download_queue.put((line.split('|')[0], int(line.split('|')[1]), line.split('|')[2].strip('\n')))
+            # Deserialize and load download queue
+            with open('{}download_queue.pkl'.format(self.storage), 'rb') as download_progress:
+                self.download_queue = pickle.load(download_progress)
                 download_progress.close()
 
-            with open('{}post_queue.progress'.format(self.storage), 'r') as post_progress:
-                for line in post_progress:
-                    self.post_queue.put(int(line.strip('\n')))
+            # Deserialize and load post queue
+            with open('{}post_queue.pkl'.format(self.storage), 'rb') as post_progress:
+                self.post_queue = pickle.load(post_progress)
                 post_progress.close()
 
+            # Read metadata
             self.read_metadata()
         except (KeyError, ValueError):
             self.print_faulty_progress_file()
             exit(1)
 
-    def read_metadata(self):
-        progress = configparser.ConfigParser()
-        progress.read('{}metadata.progress'.format(self.storage))
-        self.safe = bool(int(progress['RATINGS']['safe']))
-        self.questionable = bool(int(progress['RATINGS']['questionable']))
-        self.explicit = bool(int(progress['RATINGS']['explicit']))
-        self.total_downloads += int(progress['STATISTICS']['total_downloads'])
-        self.time_elapsed = float(progress['STATISTICS']['time_elapsed'])
-        self.previous_newest_id = progress['UPDATING']['previous_newest_id']
-        self.separate = bool(int(progress['UPDATING']['SEPARATE']))
-
     @print_locker
     def warn_keyboard_interrupt(self):
         # Tells the user that Ctrl^C is caught
-        print('[Main Thread] KeyboardInterrupt Caught!')
-        print('[Main Thread] Flushing queues and exiting')
+        print('[Main Thread] KeyboardInterrupt Caught!', file=sys.stderr)
+        print('[Main Thread] Flushing queues and exiting', file=sys.stderr)
 
     @print_locker
     def print_saving_progress(self):
@@ -589,7 +663,7 @@ class konadl:
         minute = datetime.datetime.now().time().minute
         second = datetime.datetime.now().time().second
         print("[{}:{}:{}] [Page={}] Retrieving: {}".format(
-            hour, minute, second, page, url))
+            hour, minute, second, page, url), file=sys.stderr)
 
     @print_locker
     def print_crawling_page(self, page):
@@ -599,27 +673,27 @@ class konadl:
     @print_locker
     def print_thread_exit(self, name):
         # Thread exiting message
-        print('[libkonadl] {} thread exiting'.format(name))
+        print('[libkonadl] {} thread exiting'.format(name), file=sys.stderr)
 
     @print_locker
     def print_429(self):
         # HTTP returns 429
-        print('HTTP Error 429: You are sending too many requests')
-        print('Trying to recover from error')
-        print('Putting job back to queue')
+        print('HTTP Error 429: You are sending too many requests', file=sys.stderr)
+        print('Trying to recover from error', file=sys.stderr)
+        print('Putting job back to queue', file=sys.stderr)
 
     @print_locker
     def print_exception(self):
         # Any exception
-        print('An error has occurred in this thread')
-        print('Trying to recover from error')
-        print('Putting job back to queue')
+        print('An error has occurred in this thread', file=sys.stderr)
+        print('Trying to recover from error', file=sys.stderr)
+        print('Putting job back to queue', file=sys.stderr)
 
     @print_locker
     def print_faulty_progress_file(self):
         # Tell the use the progress file is faulty
-        print('Error: Faulty progress file!')
-        print('Aborting\n')
+        print('Error: Faulty progress file!', file=sys.stderr)
+        print('Aborting\n', file=sys.stderr)
 
 
 if __name__ == '__main__':
@@ -629,13 +703,13 @@ if __name__ == '__main__':
     when called directly as a standalone program
     for demonstration.
     """
-    kona = konadl()  # Create crawler object
+    kona = Konadl()  # Create crawler object
 
     # Set storage directory
     # Note that there's a "/" and the end
     kona.storage = '/tmp/konachan/'
     if not os.path.isdir(kona.storage):  # Quit if storage directory not found
-        print('Error: storage directory not found')
+        print('Error: storage directory not found', file=sys.stderr)
         exit(1)
 
     # Set this to True If you want to crawl yande.re
