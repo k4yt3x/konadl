@@ -3,7 +3,7 @@
 **Please read the [EULA](https://github.com/K4YT3X/konadl#eula) section carefully before starting to use this software.**
 
 libkonadl Version: **1.8.1**  
-KonaDL CLI Version: **1.3.7**
+KonaDL CLI Version: **1.3.8**
 
 ## **[Video Demo](https://youtu.be/a2_tC_uugP4)**
 
@@ -22,7 +22,11 @@ Just preventing people from missing this.
    - Temporary network issues
    - Temporary server-side situations
 
-## July 7, 2018 (1.8.1) Changes
+## KonadDL CLI 1.3.8 (October 19, 2018)
+
+1. Updated for avalon framework 1.6.1
+
+## libkonadl (July 7, 2018)
 
 1. Seperated download will now be remembered
 2. Images downloaded can now be stored in separate folders according to ratings
