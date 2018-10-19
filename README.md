@@ -2,8 +2,8 @@
 
 **Please read the [EULA](https://github.com/K4YT3X/konadl#eula) section carefully before starting to use this software.**
 
-libkonadl Version: **1.8.1**  
-KonaDL CLI Version: **1.3.8**
+libkonadl Version: **1.9.0**  
+KonaDL CLI Version: **1.3.9**
 
 ## **[Video Demo](https://youtu.be/a2_tC_uugP4)**
 
@@ -22,15 +22,15 @@ Just preventing people from missing this.
    - Temporary network issues
    - Temporary server-side situations
 
-## KonadDL CLI 1.3.8 (October 19, 2018)
+## libkonadl 1.9.0 (October 19, 2018)
 
-1. Updated for avalon framework 1.6.1
+1. Changed metadata format from INI to JSON.
+1. Fixed all the problems with pausing and resuming the download by serializing and storing queues instead of dumping queues into files.
 
-## libkonadl (July 7, 2018)
+## KonadDL CLI 1.3.9 (October 19, 2018)
 
-1. Seperated download will now be remembered
-2. Images downloaded can now be stored in separate folders according to ratings
-3. You can now update newly added images to a download
+1. Changed class names to follow python naming conventions.
+1. Updated for avalon framework 1.6.1.
 
 ![konadl1 7](https://user-images.githubusercontent.com/21986859/39401587-a75ab99e-4b16-11e8-8282-7b7c10853751.png)
 
